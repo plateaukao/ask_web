@@ -239,7 +239,7 @@ async function createFloatingWindow() {
     /* Content Area */
     .content {
       flex: 1;
-      overflow-y: auto;
+      overflow: hidden; /* Prevent main content from scrolling */
       padding: 16px;
       display: flex;
       flex-direction: column;
@@ -299,13 +299,14 @@ async function createFloatingWindow() {
 
     /* Result Area */
     .result-area {
+      flex: 1; /* Grow to fill space */
+      overflow-y: auto; /* Scroll internally */
       background: var(--bg-secondary);
       border-radius: var(--radius-md);
       padding: 12px;
       font-size: 14px;
       line-height: 1.6;
-      color: var(--text-primary); /* Corrected from #e2e8f0 */
-      min-height: 100px;
+      color: var(--text-primary);
       border: 1px solid var(--border-color);
     }
     
