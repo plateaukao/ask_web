@@ -50,32 +50,28 @@ async function createFloatingWindow() {
 
   let { x, y, width, height } = state.windowState || {};
 
-  // Validate loaded state (fix for 0x0 bug)
+  // Validate loaded state (force defaults if missing or at 0,0 which is suspicious for first run)
   if (!width || width < 200) width = defaultWidth;
   if (!height || height < 200) height = defaultHeight;
-  if (x === undefined || x < 0) x = defaultX;
-  if (y === undefined || y < 0) y = defaultY;
+  if (x === undefined || (x === 0 && y === 0)) x = defaultX;
+  if (y === undefined || (x === defaultX && y === 0)) y = defaultY;
 
-  // Ensure within viewport bounds (keep fully on screen if possible)
-  const safeX = Math.min(Math.max(0, x), window.innerWidth - width);
-  const safeY = Math.min(Math.max(0, y), window.innerHeight - height);
+  // Ensure within viewport bounds (keep fully on screen)
+  const safeX = Math.max(10, Math.min(x, window.innerWidth - width - 10));
+  const safeY = Math.max(10, Math.min(y, window.innerHeight - height - 10));
 
   // Create container (Host)
   try {
     floatingWindow = document.createElement('div');
     floatingWindow.id = 'ask-web-floating-window';
-    floatingWindow.style.cssText = `
-      position: fixed;
-      top: ${safeY}px;
-      right: auto;
-      left: ${safeX}px;
-      width: ${width}px;
-      height: ${height}px;
-      z-index: 2147483647;
-      background: transparent;
-      pointer-events: auto;
-      display: block; 
-    `;
+    floatingWindow.style.position = 'fixed';
+    floatingWindow.style.zIndex = '2147483647';
+    floatingWindow.style.background = 'transparent';
+    floatingWindow.style.pointerEvents = 'auto';
+    floatingWindow.style.display = 'block';
+
+    // Apply initial state
+    applyWindowState({ x: safeX, y: safeY, width, height });
 
     // Create Shadow DOM
     shadowRoot = floatingWindow.attachShadow({ mode: 'open' });
@@ -415,6 +411,20 @@ function applyTheme(theme) {
       floatingWindow.removeAttribute('data-theme');
     }
   }
+}
+
+function applyWindowState(state) {
+  if (!floatingWindow || !state) return;
+
+  const { x, y, width, height } = state;
+  // Keep window fully on screen if possible, but allow dragging off partially (max 50px left/right/bottom)
+  const safeX = Math.min(Math.max(50 - width, x), window.innerWidth - 50);
+  const safeY = Math.min(Math.max(0, y), window.innerHeight - 50);
+
+  floatingWindow.style.left = `${safeX}px`;
+  floatingWindow.style.top = `${safeY}px`;
+  floatingWindow.style.width = `${width}px`;
+  floatingWindow.style.height = `${height}px`;
 }
 
 async function loadTemplates(root) {
