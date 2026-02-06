@@ -2,6 +2,8 @@
 
 let pageData = null;
 let templates = [];
+let isStreaming = false;
+let streamContent = '';
 
 // DOM Elements
 const pageTitleEl = document.getElementById('pageTitle');
@@ -22,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadTemplates();
   await extractPageContent();
   setupEventListeners();
+  setupStreamListener();
 });
 
 async function loadTemplates() {
@@ -131,6 +134,37 @@ function setupEventListeners() {
   copyBtn.addEventListener('click', handleCopy);
 }
 
+// Listen for streaming responses from background
+function setupStreamListener() {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'popupStreamChunk') {
+      handleStreamChunk(message.content);
+    } else if (message.action === 'popupStreamEnd') {
+      handleStreamEnd();
+    } else if (message.action === 'popupStreamError') {
+      handleStreamError(message.error);
+    }
+  });
+}
+
+function handleStreamChunk(content) {
+  streamContent += content;
+  renderMarkdownResult(streamContent);
+}
+
+function handleStreamEnd() {
+  isStreaming = false;
+  summarizeBtn.disabled = false;
+  chatBtn.disabled = false;
+  streamContent = '';
+}
+
+function handleStreamError(error) {
+  isStreaming = false;
+  showError(error);
+  streamContent = '';
+}
+
 async function handleSummarize() {
   if (!pageData || !pageData.content) {
     showError('No content found on this page');
@@ -152,28 +186,32 @@ async function handleSummarize() {
     return;
   }
 
-  // Show loading
-  showLoading();
+  // Show streaming result area
+  showStreamingResult();
+  isStreaming = true;
+  streamContent = '';
 
-  try {
-    // Process template with content
-    const content = truncateContent(pageData.content);
-    const prompt = processTemplate(template.prompt, content);
+  // Process template with content
+  const content = truncateContent(pageData.content);
+  const prompt = processTemplate(template.prompt, content);
 
-    // Send to background for API call
-    const response = await chrome.runtime.sendMessage({
-      action: 'summarize',
-      prompt: prompt
-    });
-
-    if (response.error) {
-      throw new Error(response.error);
+  // Build messages for streaming API
+  const messages = [
+    {
+      role: 'system',
+      content: 'You are a helpful assistant that summarizes web content clearly and concisely. Use markdown formatting for better readability.'
+    },
+    {
+      role: 'user',
+      content: prompt
     }
+  ];
 
-    showResult(response.result);
-  } catch (error) {
-    showError(error.message);
-  }
+  // Start streaming request
+  chrome.runtime.sendMessage({
+    action: 'startPopupStream',
+    messages: messages
+  });
 }
 
 async function handleChat() {
@@ -190,7 +228,7 @@ async function handleChat() {
 }
 
 function handleCopy() {
-  const text = resultContent.textContent;
+  const text = resultContent.innerText;
   navigator.clipboard.writeText(text).then(() => {
     copyBtn.innerHTML = `
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -208,16 +246,42 @@ function handleCopy() {
   });
 }
 
-function showLoading() {
+function showStreamingResult() {
   hideAll();
-  loadingEl.classList.remove('hidden');
+  resultContent.innerHTML = '<span class="cursor-blink">▊</span>';
+  resultArea.classList.remove('hidden');
   summarizeBtn.disabled = true;
   chatBtn.disabled = true;
 }
 
+function renderMarkdownResult(text) {
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      headerIds: false,
+      mangle: false
+    });
+    resultContent.innerHTML = marked.parse(text) + '<span class="cursor-blink">▊</span>';
+  } else {
+    resultContent.textContent = text;
+  }
+}
+
 function showResult(text) {
   hideAll();
-  resultContent.textContent = text;
+  // Render markdown if marked is available
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      headerIds: false,
+      mangle: false
+    });
+    resultContent.innerHTML = marked.parse(text);
+  } else {
+    resultContent.textContent = text;
+  }
   resultArea.classList.remove('hidden');
   summarizeBtn.disabled = false;
   chatBtn.disabled = false;

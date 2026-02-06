@@ -4,6 +4,8 @@ let pageData = null;
 let templates = [];
 let messages = [];
 let isLoading = false;
+let currentStreamContent = '';
+let currentStreamElement = null;
 
 // DOM Elements
 const contextTitle = document.getElementById('contextTitle');
@@ -23,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await loadPageData();
   setupEventListeners();
+  setupStreamListener();
 });
 
 async function loadSettings() {
@@ -56,9 +59,14 @@ async function loadPageData() {
 }
 
 function setupEventListeners() {
-  // Model change
+  // Model change - now handles input instead of select
   modelSelect.addEventListener('change', async () => {
     await setModel(modelSelect.value);
+  });
+  modelSelect.addEventListener('blur', async () => {
+    if (modelSelect.value.trim()) {
+      await setModel(modelSelect.value.trim());
+    }
   });
 
   // Apply template
@@ -141,6 +149,53 @@ function setupEventListeners() {
   sendBtn.addEventListener('click', sendMessage);
 }
 
+// Listen for streaming responses from background
+function setupStreamListener() {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'streamChunk') {
+      handleStreamChunk(message.content);
+    } else if (message.action === 'streamEnd') {
+      handleStreamEnd();
+    } else if (message.action === 'streamError') {
+      handleStreamError(message.error);
+    }
+  });
+}
+
+function handleStreamChunk(content) {
+  currentStreamContent += content;
+  if (currentStreamElement) {
+    const contentDiv = currentStreamElement.querySelector('.message-content');
+    if (contentDiv) {
+      contentDiv.innerHTML = renderMarkdown(currentStreamContent);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }
+}
+
+function handleStreamEnd() {
+  if (currentStreamContent) {
+    messages.push({ role: 'assistant', content: currentStreamContent });
+  }
+  currentStreamContent = '';
+  currentStreamElement = null;
+  isLoading = false;
+  sendBtn.disabled = false;
+}
+
+function handleStreamError(error) {
+  if (currentStreamElement) {
+    const contentDiv = currentStreamElement.querySelector('.message-content');
+    if (contentDiv) {
+      contentDiv.innerHTML = `<span style="color: #ff6b6b;">Error: ${error}</span>`;
+    }
+  }
+  currentStreamContent = '';
+  currentStreamElement = null;
+  isLoading = false;
+  sendBtn.disabled = false;
+}
+
 function setupQuickActions() {
   document.querySelectorAll('.quick-action').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -176,9 +231,11 @@ async function sendMessage() {
 
   // Add user message
   addMessage('user', content);
+  messages.push({ role: 'user', content });
   messageInput.value = '';
   messageInput.style.height = 'auto';
   sendBtn.disabled = true;
+  isLoading = true;
 
   // Build messages for API
   const systemMessage = buildSystemMessage();
@@ -187,34 +244,19 @@ async function sendMessage() {
     ...messages.map(m => ({ role: m.role, content: m.content }))
   ];
 
-  // Show typing indicator
-  const typingEl = showTypingIndicator();
-  isLoading = true;
+  // Create assistant message placeholder for streaming
+  currentStreamContent = '';
+  currentStreamElement = createStreamingMessage();
 
-  try {
-    const response = await chrome.runtime.sendMessage({
-      action: 'chat',
-      messages: apiMessages
-    });
-
-    // Remove typing indicator
-    typingEl.remove();
-    isLoading = false;
-
-    if (response.error) {
-      addMessage('assistant', `Error: ${response.error}`);
-    } else {
-      addMessage('assistant', response.result);
-    }
-  } catch (error) {
-    typingEl.remove();
-    isLoading = false;
-    addMessage('assistant', `Error: ${error.message}`);
-  }
+  // Start streaming request
+  chrome.runtime.sendMessage({
+    action: 'startStream',
+    messages: apiMessages
+  });
 }
 
 function buildSystemMessage() {
-  let systemMessage = `You are a helpful assistant that answers questions about web content. Be concise but thorough.`;
+  let systemMessage = `You are a helpful assistant that answers questions about web content. Use markdown formatting for better readability (headers, lists, bold, code blocks, etc.). Be concise but thorough.`;
 
   if (pageData && pageData.content) {
     const content = truncateContent(pageData.content, 8000);
@@ -225,8 +267,6 @@ function buildSystemMessage() {
 }
 
 function addMessage(role, content) {
-  messages.push({ role, content });
-
   const messageEl = document.createElement('div');
   messageEl.className = `message ${role}`;
 
@@ -243,17 +283,17 @@ function addMessage(role, content) {
 
   messageEl.innerHTML = `
     <div class="message-avatar">${avatarSvg}</div>
-    <div class="message-content">${formatMessage(content)}</div>
+    <div class="message-content">${renderMarkdown(content)}</div>
   `;
 
   messagesContainer.appendChild(messageEl);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function showTypingIndicator() {
-  const typingEl = document.createElement('div');
-  typingEl.className = 'message assistant';
-  typingEl.innerHTML = `
+function createStreamingMessage() {
+  const messageEl = document.createElement('div');
+  messageEl.className = 'message assistant';
+  messageEl.innerHTML = `
     <div class="message-avatar">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"/>
@@ -262,21 +302,30 @@ function showTypingIndicator() {
       </svg>
     </div>
     <div class="message-content">
-      <div class="typing-indicator">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+      <span class="cursor-blink">▊</span>
     </div>
   `;
-  messagesContainer.appendChild(typingEl);
+  messagesContainer.appendChild(messageEl);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  return typingEl;
+  return messageEl;
 }
 
-function formatMessage(content) {
-  // Basic markdown-like formatting
+// Markdown rendering using marked.js (loaded via CDN in HTML)
+function renderMarkdown(content) {
+  if (typeof marked !== 'undefined') {
+    // Configure marked for safe rendering
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      headerIds: false,
+      mangle: false
+    });
+    return marked.parse(content);
+  }
+  // Fallback to basic formatting if marked is not loaded
   return content
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')

@@ -1,22 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ask Web - Settings</title>
   <link rel="stylesheet" href="options.css">
 </head>
+
 <body>
   <div class="container">
     <header class="header">
       <div class="logo">
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-          <circle cx="16" cy="16" r="14" stroke="url(#gradient)" stroke-width="2"/>
-          <path d="M16 8v8l6 4" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="16" cy="16" r="14" stroke="url(#gradient)" stroke-width="2" />
+          <path d="M16 8v8l6 4" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" />
           <defs>
             <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
-              <stop stop-color="#667eea"/>
-              <stop offset="1" stop-color="#764ba2"/>
+              <stop stop-color="#667eea" />
+              <stop offset="1" stop-color="#764ba2" />
             </linearGradient>
           </defs>
         </svg>
@@ -29,15 +31,15 @@
       <!-- API Configuration -->
       <section class="card">
         <h2>API Configuration</h2>
-        
+
         <div class="form-group">
           <label for="apiKey">OpenAI API Key</label>
           <div class="input-with-button">
             <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
             <button type="button" id="toggleKey" class="btn-icon" title="Show/Hide">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
           </div>
@@ -46,13 +48,17 @@
 
         <div class="form-group">
           <label for="model">Model</label>
-          <select id="model">
-            <option value="gpt-4o">GPT-4o (Latest)</option>
-            <option value="gpt-4o-mini" selected>GPT-4o Mini</option>
+          <input type="text" id="model" list="modelList" placeholder="Enter or select a model">
+          <datalist id="modelList">
+            <option value="gpt-5.2-pro">GPT-5.2 Pro (Latest)</option>
+            <option value="gpt-5.2">GPT-5.2</option>
+            <option value="gpt-4.1">GPT-4.1</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o Mini</option>
             <option value="gpt-4-turbo">GPT-4 Turbo</option>
-            <option value="gpt-4">GPT-4</option>
             <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-          </select>
+          </datalist>
+          <small>Select from the list or type any model name (e.g., gpt-5.2-pro, o1-preview)</small>
         </div>
       </section>
 
@@ -62,8 +68,8 @@
           <h2>Prompt Templates</h2>
           <button id="addTemplate" class="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             Add Template
           </button>
@@ -81,8 +87,8 @@
             <h3 id="modalTitle">Add Template</h3>
             <button id="closeModal" class="btn-icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
@@ -93,7 +99,8 @@
             </div>
             <div class="form-group">
               <label for="templatePrompt">Prompt</label>
-              <textarea id="templatePrompt" rows="6" placeholder="Enter your prompt here. Use {{content}} as placeholder for web content."></textarea>
+              <textarea id="templatePrompt" rows="6"
+                placeholder="Enter your prompt here. Use {{content}} as placeholder for web content."></textarea>
               <small>Use <code>{{content}}</code> to insert the web content</small>
             </div>
           </div>
@@ -116,4 +123,5 @@
   <script src="utils.js"></script>
   <script src="options.js"></script>
 </body>
+
 </html>

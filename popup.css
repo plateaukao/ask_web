@@ -241,6 +241,68 @@ body {
   border-radius: 3px;
 }
 
+/* Markdown Styling */
+.result-content h1,
+.result-content h2,
+.result-content h3 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+
+.result-content h1 {
+  font-size: 16px;
+}
+
+.result-content h2 {
+  font-size: 14px;
+}
+
+.result-content h3 {
+  font-size: 13px;
+}
+
+.result-content p {
+  margin-bottom: 8px;
+}
+
+.result-content ul,
+.result-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.result-content li {
+  margin-bottom: 4px;
+}
+
+.result-content code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+.result-content pre {
+  background: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.result-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.result-content blockquote {
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
 /* Loading */
 .loading {
   display: flex;
@@ -304,4 +366,23 @@ body {
 /* Utilities */
 .hidden {
   display: none !important;
+}
+
+/* Streaming Cursor */
+.cursor-blink {
+  animation: blink 1s infinite;
+  color: var(--accent-primary);
+}
+
+@keyframes blink {
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
 }

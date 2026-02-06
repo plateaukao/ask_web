@@ -142,7 +142,8 @@ body {
   margin-bottom: 6px;
 }
 
-.setting-item select {
+.setting-item select,
+.setting-item input[type="text"] {
   width: 100%;
   padding: 10px 12px;
   font-size: 13px;
@@ -152,14 +153,18 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: var(--transition);
+}
+
+.setting-item select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a0a0b0' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
-  transition: var(--transition);
 }
 
-.setting-item select:focus {
+.setting-item select:focus,
+.setting-item input[type="text"]:focus {
   outline: none;
   border-color: var(--accent-primary);
 }
@@ -382,8 +387,88 @@ body {
   background: rgba(0, 0, 0, 0.3);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'Fira Code', monospace;
+  font-family: 'Fira Code', 'Monaco', monospace;
   font-size: 13px;
+}
+
+.message-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.message-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+
+.message-content h1 {
+  font-size: 18px;
+}
+
+.message-content h2 {
+  font-size: 16px;
+}
+
+.message-content h3 {
+  font-size: 14px;
+}
+
+.message-content h4 {
+  font-size: 13px;
+}
+
+.message-content blockquote {
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.message-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+}
+
+.message-content th,
+.message-content td {
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  text-align: left;
+}
+
+.message-content th {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Streaming Cursor */
+.cursor-blink {
+  animation: blink 1s infinite;
+  color: var(--accent-primary);
+}
+
+@keyframes blink {
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Typing Indicator */

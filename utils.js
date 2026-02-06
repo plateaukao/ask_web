@@ -7,10 +7,12 @@ const StorageKeys = {
 };
 
 const DefaultModels = [
-  { id: 'gpt-4o', name: 'GPT-4o (Latest)' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro (Latest)' },
+  { id: 'gpt-5.2', name: 'GPT-5.2' },
+  { id: 'gpt-4.1', name: 'GPT-4.1' },
+  { id: 'gpt-4o', name: 'GPT-4o' },
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
   { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-  { id: 'gpt-4', name: 'GPT-4' },
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
 ];
 
