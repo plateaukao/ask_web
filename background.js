@@ -15,6 +15,21 @@ let popupState = {
   content: ''
 };
 
+// Handle extension icon click
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    // Send message to content script to toggle window
+    await chrome.tabs.sendMessage(tab.id, { action: 'toggleFloatingWindow' });
+  } catch (error) {
+    console.warn('Content script not ready or error toggling window:', error);
+    // Optional: Inject content script if missing (basic fallback)
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['marked.min.js', 'utils.js', 'content.js']
+    });
+  }
+});
+
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getPopupState') {
@@ -36,6 +51,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'openOptions') {
+    chrome.runtime.openOptionsPage();
+    return true;
+  }
+
   if (request.action === 'openChat') {
     // Store page data for chat page to retrieve
     chrome.storage.session.set({ currentPageData: request.pageData });
@@ -52,9 +72,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
-  // For streaming to popup
+  // For streaming to popup/content script
   if (request.action === 'startPopupStream') {
-    handlePopupStreamRequest(request);
+    handlePopupStreamRequest(request, sender);
     sendResponse({ started: true });
     return true;
   }
@@ -219,13 +239,21 @@ async function handleStreamRequest(request, sender) {
 }
 
 // Streaming handler for popup
-async function handlePopupStreamRequest(request) {
+async function handlePopupStreamRequest(request, sender) { // Added sender
   const apiKey = await getStorageValue('openai_api_key');
   if (!apiKey) {
-    chrome.runtime.sendMessage({
-      action: 'popupStreamError',
-      error: 'Please set your OpenAI API key in the extension settings'
-    });
+    const errorMsg = 'Please set your OpenAI API key in the extension settings';
+    if (sender?.tab?.id) {
+      chrome.tabs.sendMessage(sender.tab.id, {
+        action: 'popupStreamError',
+        error: errorMsg
+      });
+    } else {
+      chrome.runtime.sendMessage({
+        action: 'popupStreamError',
+        error: errorMsg
+      });
+    }
     return;
   }
 
@@ -236,6 +264,8 @@ async function handlePopupStreamRequest(request) {
   };
 
   const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
+  // Determine target: sender tab (content script) or runtime (popup)
+  const targetTabId = sender?.tab?.id;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -257,10 +287,12 @@ async function handlePopupStreamRequest(request) {
       const error = await response.json();
       const errorMsg = error.error?.message || 'API request failed';
       popupState.isStreaming = false;
-      chrome.runtime.sendMessage({
-        action: 'popupStreamError',
-        error: errorMsg
-      });
+
+      if (targetTabId) {
+        chrome.tabs.sendMessage(targetTabId, { action: 'popupStreamError', error: errorMsg });
+      } else {
+        chrome.runtime.sendMessage({ action: 'popupStreamError', error: errorMsg });
+      }
       return;
     }
 
@@ -281,7 +313,11 @@ async function handlePopupStreamRequest(request) {
           const data = line.slice(6);
           if (data === '[DONE]') {
             popupState.isStreaming = false;
-            chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
+            if (targetTabId) {
+              chrome.tabs.sendMessage(targetTabId, { action: 'popupStreamEnd' });
+            } else {
+              chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
+            }
             return;
           }
           try {
@@ -289,10 +325,12 @@ async function handlePopupStreamRequest(request) {
             const content = parsed.choices[0]?.delta?.content;
             if (content) {
               popupState.content += content;
-              chrome.runtime.sendMessage({
-                action: 'popupStreamChunk',
-                content: content
-              });
+              const msg = { action: 'popupStreamChunk', content: content };
+              if (targetTabId) {
+                chrome.tabs.sendMessage(targetTabId, msg);
+              } else {
+                chrome.runtime.sendMessage(msg);
+              }
             }
           } catch (e) {
             // Skip invalid JSON
@@ -302,12 +340,18 @@ async function handlePopupStreamRequest(request) {
     }
 
     popupState.isStreaming = false;
-    chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
+    if (targetTabId) {
+      chrome.tabs.sendMessage(targetTabId, { action: 'popupStreamEnd' });
+    } else {
+      chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
+    }
   } catch (error) {
     popupState.isStreaming = false;
-    chrome.runtime.sendMessage({
-      action: 'popupStreamError',
-      error: error.message
-    });
+    const errorMsg = error.message;
+    if (targetTabId) {
+      chrome.tabs.sendMessage(targetTabId, { action: 'popupStreamError', error: errorMsg });
+    } else {
+      chrome.runtime.sendMessage({ action: 'popupStreamError', error: errorMsg });
+    }
   }
 }

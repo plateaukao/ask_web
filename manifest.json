@@ -9,7 +9,6 @@
     "scripting"
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",
@@ -32,6 +31,8 @@
         "<all_urls>"
       ],
       "js": [
+        "marked.min.js",
+        "utils.js",
         "content.js"
       ],
       "run_at": "document_idle"

@@ -1,5 +1,5 @@
 // Storage utility functions
-const StorageKeys = {
+var StorageKeys = StorageKeys || {
   API_KEY: 'openai_api_key',
   MODEL: 'openai_model',
   TEMPLATES: 'prompt_templates',
@@ -31,7 +31,7 @@ function applyTheme(theme) {
   }
 }
 
-const DefaultModels = [
+var DefaultModels = DefaultModels || [
   { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro (Latest)' },
   { id: 'gpt-5.2', name: 'GPT-5.2' },
   { id: 'gpt-4.1', name: 'GPT-4.1' },
@@ -41,7 +41,7 @@ const DefaultModels = [
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
 ];
 
-const DefaultTemplates = [
+var DefaultTemplates = DefaultTemplates || [
   {
     id: 'summarize',
     name: 'Summarize',
