@@ -3,6 +3,7 @@
 let pageData = null;
 let templates = [];
 let isStreaming = false;
+let streamContent = '';
 let currentTabId = null;
 
 // DOM Elements
@@ -23,9 +24,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initTheme();
   await loadTemplates();
   await extractPageContent();
+  await restoreState();
   setupEventListeners();
   setupStreamListener();
 });
+
+async function restoreState() {
+  const state = await chrome.runtime.sendMessage({ action: 'getPopupState' });
+  if (state && state.content && state.tabId === currentTabId) {
+    streamContent = state.content;
+    isStreaming = state.isStreaming;
+
+    if (isStreaming) {
+      showStreamingResult();
+      renderMarkdownResult(streamContent, true);
+    } else {
+      showResult(streamContent);
+    }
+  }
+}
+
 
 async function loadTemplates() {
   templates = await getTemplates();
@@ -236,7 +254,8 @@ async function handleSummarize() {
   // Start streaming request
   chrome.runtime.sendMessage({
     action: 'startPopupStream',
-    messages: messages
+    messages: messages,
+    tabId: currentTabId
   });
 }
 

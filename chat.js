@@ -22,6 +22,7 @@ const sendBtn = document.getElementById('sendBtn');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  await initTheme();
   await loadSettings();
   await loadPageData();
   setupEventListeners();

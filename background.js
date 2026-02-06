@@ -9,8 +9,19 @@ async function getStorageValue(key) {
   });
 }
 
+// State tracking
+let popupState = {
+  isStreaming: false,
+  content: ''
+};
+
 // Message handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getPopupState') {
+    sendResponse(popupState);
+    return true;
+  }
+
   if (request.action === 'summarize') {
     handleSummarize(request)
       .then(sendResponse)
@@ -218,6 +229,12 @@ async function handlePopupStreamRequest(request) {
     return;
   }
 
+  // Reset state
+  popupState = {
+    isStreaming: true,
+    content: ''
+  };
+
   const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
 
   try {
@@ -238,9 +255,11 @@ async function handlePopupStreamRequest(request) {
 
     if (!response.ok) {
       const error = await response.json();
+      const errorMsg = error.error?.message || 'API request failed';
+      popupState.isStreaming = false;
       chrome.runtime.sendMessage({
         action: 'popupStreamError',
-        error: error.error?.message || 'API request failed'
+        error: errorMsg
       });
       return;
     }
@@ -261,6 +280,7 @@ async function handlePopupStreamRequest(request) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') {
+            popupState.isStreaming = false;
             chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
             return;
           }
@@ -268,6 +288,7 @@ async function handlePopupStreamRequest(request) {
             const parsed = JSON.parse(data);
             const content = parsed.choices[0]?.delta?.content;
             if (content) {
+              popupState.content += content;
               chrome.runtime.sendMessage({
                 action: 'popupStreamChunk',
                 content: content
@@ -280,8 +301,10 @@ async function handlePopupStreamRequest(request) {
       }
     }
 
+    popupState.isStreaming = false;
     chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
   } catch (error) {
+    popupState.isStreaming = false;
     chrome.runtime.sendMessage({
       action: 'popupStreamError',
       error: error.message
