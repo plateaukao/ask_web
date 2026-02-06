@@ -247,21 +247,35 @@ async function createFloatingWindow() {
       background: var(--bg-primary);
     }
 
-    /* Action Buttons */
+    /* Controls (Header) */
+    .controls {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    /* Action Buttons Area */
     .actions {
       display: flex;
-      gap: 10px;
+      flex-wrap: wrap; /* Wrap if too many buttons */
+      gap: 8px;
     }
 
     .btn {
-      flex: 1;
-      padding: 10px;
+      padding: 6px 10px;
       border: none;
       border-radius: var(--radius-sm);
       font-weight: 500;
+      font-size: 13px; /* Smaller text */
       cursor: pointer;
       transition: all 0.2s;
       font-family: inherit;
+      white-space: nowrap;
+      flex-grow: 1; /* Grow to fill space */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     .btn-primary {
@@ -274,8 +288,14 @@ async function createFloatingWindow() {
       color: var(--text-primary);
       border: 1px solid var(--border-color);
     }
+    
+    .btn-secondary:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent-primary);
+    }
 
-    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn:hover { opacity: 0.95; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
 
     /* Result Area */
     .result-area {
@@ -326,6 +346,12 @@ async function createFloatingWindow() {
         Ask Web
       </div>
       <div class="controls">
+        <button id="settingsBtn" class="btn-icon" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
         <button class="btn-icon" id="closeBtn" title="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -335,24 +361,9 @@ async function createFloatingWindow() {
       </div>
     </div>
     
-    <div class="controls-header">
-       <div class="template-group">
-        <select id="templateSelect" title="Select Template"></select>
-      </div>
-      <div class="header-actions">
-        <button id="settingsBtn" class="btn-icon" title="Settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
-      </div>
-    </div>
-    
     <div class="content">
-      <div class="actions">
-        <button id="summarizeBtn" class="btn btn-primary">Summarize Page</button>
-        <button id="chatBtn" class="btn btn-secondary">Chat</button>
+      <div id="actionButtons" class="actions">
+        <!-- Dynamic Buttons injected here -->
       </div>
       
       <div id="resultArea" class="result-area hidden">
@@ -406,24 +417,90 @@ function applyTheme(theme) {
 }
 
 async function loadTemplates(root) {
-  const data = await getStorageData(['prompt_templates', 'default_template']);
+  const data = await getStorageData(['prompt_templates']);
   const templates = data.prompt_templates || [
     { id: 'summarize', name: 'Summarize', prompt: 'Please provide a concise summary of the following web content. Focus on the main points and key takeaways:\n\n{{content}}' },
-    { id: 'explain', name: 'Explain Simply', prompt: 'Explain the following web content in simple terms that anyone can understand:\n\n{{content}}' },
+    { id: 'explain', name: 'Explain', prompt: 'Explain the following web content in simple terms that anyone can understand:\n\n{{content}}' },
     { id: 'key_points', name: 'Key Points', prompt: 'Extract the key points from the following web content as a bullet list:\n\n{{content}}' }
   ];
-  const defaultId = data.default_template || 'summarize';
 
-  const select = root.getElementById('templateSelect');
-  select.innerHTML = '';
+  const container = root.getElementById('actionButtons');
+  container.innerHTML = '';
 
+  // 1. Render Template Buttons
   templates.forEach(t => {
-    const option = document.createElement('option');
-    option.value = t.id;
-    option.textContent = t.name;
-    option.dataset.prompt = t.prompt;
-    if (t.id === defaultId) option.selected = true;
-    select.appendChild(option);
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary'; // Default to secondary style for templates
+    btn.textContent = t.name;
+    // Store prompt in dataset
+    btn.dataset.prompt = t.prompt;
+    btn.dataset.action = 'template';
+
+    // Attach click listener directly
+    btn.addEventListener('click', () => handleTemplateClick(root, t.prompt));
+
+    container.appendChild(btn);
+  });
+
+  // 2. Render Chat Button (Always last)
+  const chatBtn = document.createElement('button');
+  chatBtn.className = 'btn btn-primary'; // Chat gets primary emphasis? Or maybe distinct?
+  // Let's keep Chat as Primary for now, or maybe make Summarize primary? 
+  // User asked for "individual action buttons... aligned with chat button".
+  chatBtn.textContent = 'Chat';
+  chatBtn.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg> Chat
+  `;
+  chatBtn.id = 'chatBtn';
+  chatBtn.addEventListener('click', () => handleChatClick(root));
+
+  container.appendChild(chatBtn);
+}
+
+// Logic for Template Clicks
+async function handleTemplateClick(root, promptTemplate) {
+  const resultArea = root.getElementById('resultArea');
+  const resultContent = root.getElementById('resultContent');
+  const loading = root.getElementById('loading');
+
+  // Reset state
+  resultContent.innerHTML = '';
+  currentStreamContent = '';
+
+  resultArea.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  try {
+    const pageData = extractPageContent();
+    const prompt = promptTemplate.replace('{{content}}', truncateContent(pageData.content));
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'startPopupStream',
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
+
+    // Show result area immediately for streaming
+    loading.classList.add('hidden');
+    resultArea.classList.remove('hidden');
+    resultContent.innerHTML = '<span class="cursor-blink">▊</span>';
+
+  } catch (err) {
+    loading.classList.add('hidden');
+    resultContent.textContent = 'Error: ' + err.message;
+    resultArea.classList.remove('hidden');
+  }
+}
+
+async function handleChatClick(root) {
+  const pageData = extractPageContent();
+  chrome.runtime.sendMessage({
+    action: 'openChat',
+    pageData: pageData
   });
 }
 
@@ -528,59 +605,7 @@ function setupEventListeners(root) {
     chrome.runtime.sendMessage({ action: 'openOptions' });
   });
 
-  root.getElementById('summarizeBtn').addEventListener('click', async () => {
-    const resultArea = root.getElementById('resultArea');
-    const resultContent = root.getElementById('resultContent');
-    const loading = root.getElementById('loading');
-    const select = root.getElementById('templateSelect');
-
-    // Get prompt from selected template
-    const selectedOption = select.options[select.selectedIndex];
-    const promptTemplate = selectedOption.dataset.prompt;
-
-    // Reset state
-    resultContent.innerHTML = '';
-    currentStreamContent = '';
-
-    resultArea.classList.add('hidden');
-    loading.classList.remove('hidden');
-
-    try {
-      const pageData = extractPageContent();
-      const prompt = promptTemplate.replace('{{content}}', truncateContent(pageData.content));
-
-      const response = await chrome.runtime.sendMessage({
-        action: 'startPopupStream',
-        messages: [{
-          role: 'user',
-          content: prompt
-        }]
-      });
-
-      // Show result area immediately for streaming
-      loading.classList.add('hidden');
-      resultArea.classList.remove('hidden');
-      resultContent.innerHTML = '<span class="cursor-blink">▊</span>';
-
-    } catch (err) {
-      loading.classList.add('hidden');
-      resultContent.textContent = 'Error: ' + err.message;
-      resultArea.classList.remove('hidden');
-    }
-  });
-
-  root.getElementById('chatBtn').addEventListener('click', async () => {
-    // For chat, we might just open the chat UI inside the floating window later
-    // For now, let's keep the "Open Chat" functionality to open new tab or
-    // implement chat inside this window? 
-    // Plan: Refactor later. For now, open chat tab or just show alert.
-    // Actually, user wants "Chat" button. Let's open chat tab for now to preserve functionality.
-    const pageData = extractPageContent();
-    chrome.runtime.sendMessage({
-      action: 'openChat',
-      pageData: pageData
-    });
-  });
+  // NOTE: Template buttons and Chat button listeners are added in loadTemplates()
 }
 
 // Stream Helpers
