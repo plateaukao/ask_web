@@ -100,10 +100,9 @@ async function createFloatingWindow() {
       all: initial;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       display: block;
-      /* Resize on Host */
-      resize: both;
+      /* Remove CSS Resize */
       overflow: hidden;
-      border-radius: 12px; /* Host radius matches container */
+      border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); /* Host shadow */
     }
 
@@ -326,6 +325,45 @@ async function createFloatingWindow() {
     }
     
     @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+    /* Resize Handles */
+    .resize-handle {
+      position: absolute;
+      z-index: 2147483648;
+      background: transparent;
+    }
+
+    .resize-handle.left {
+      left: 0;
+      top: 0;
+      width: 8px;
+      height: 100%;
+      cursor: ew-resize;
+    }
+
+    .resize-handle.right {
+      right: 0;
+      top: 0;
+      width: 8px;
+      height: 100%;
+      cursor: ew-resize;
+    }
+
+    .resize-handle.bottom {
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 8px;
+      cursor: ns-resize;
+    }
+
+    .resize-handle.bottom-right {
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+    }
   `;
     shadowRoot.appendChild(style);
 
@@ -333,6 +371,12 @@ async function createFloatingWindow() {
     const container = document.createElement('div');
     container.className = 'window-container';
     container.innerHTML = `
+    <!-- Resize Handles -->
+    <div class="resize-handle left"></div>
+    <div class="resize-handle right"></div>
+    <div class="resize-handle bottom"></div>
+    <div class="resize-handle bottom-right"></div>
+    
     <div class="header" id="dragHandle">
       <div class="title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -548,49 +592,84 @@ function saveWindowState() {
 
 // Drag Logic - hostEl is floatingWindow, containerEl is the .window-container in Shadow DOM
 function setupDragAndResize(hostEl, containerEl) {
-  const handle = containerEl.querySelector('#dragHandle');
-  let isDragging = false;
+  const dragHandle = containerEl.querySelector('#dragHandle');
+  const handles = {
+    left: containerEl.querySelector('.resize-handle.left'),
+    right: containerEl.querySelector('.resize-handle.right'),
+    bottom: containerEl.querySelector('.resize-handle.bottom'),
+    bottomRight: containerEl.querySelector('.resize-handle.bottom-right')
+  };
+
+  let isMoving = false;
+  let moveType = null;
   let startX, startY;
-  let initialLeft, initialTop;
+  let initialRect;
 
-  handle.addEventListener('mousedown', dragStart);
+  function start(e, type) {
+    if (type === 'drag' && e.target.closest('.controls')) return;
 
-  function dragStart(e) {
-    if (e.target.closest('.controls')) return; // Don't drag if clicking buttons
-
-    isDragging = true;
+    e.preventDefault();
+    isMoving = true;
+    moveType = type;
     startX = e.clientX;
     startY = e.clientY;
+    initialRect = hostEl.getBoundingClientRect();
 
-    const rect = hostEl.getBoundingClientRect();
-    initialLeft = rect.left;
-    initialTop = rect.top;
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', stop);
 
-    document.addEventListener('mousemove', drag);
-    document.addEventListener('mouseup', dragEnd);
+    // Disable text selection while moving
+    document.body.style.userSelect = 'none';
   }
 
-  function drag(e) {
-    if (!isDragging) return;
-    e.preventDefault();
+  function move(e) {
+    if (!isMoving) return;
 
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
 
-    hostEl.style.left = `${initialLeft + dx}px`;
-    hostEl.style.top = `${initialTop + dy}px`;
+    if (moveType === 'drag') {
+      hostEl.style.left = `${initialRect.left + dx}px`;
+      hostEl.style.top = `${initialRect.top + dy}px`;
+    } else if (moveType === 'resize-left') {
+      const newWidth = Math.max(250, initialRect.width - dx);
+      if (newWidth !== initialRect.width - dx) {
+        // Hit min width
+        hostEl.style.left = `${initialRect.right - newWidth}px`;
+      } else {
+        hostEl.style.left = `${initialRect.left + dx}px`;
+      }
+      hostEl.style.width = `${newWidth}px`;
+    } else if (moveType === 'resize-right') {
+      hostEl.style.width = `${Math.max(250, initialRect.width + dx)}px`;
+    } else if (moveType === 'resize-bottom') {
+      hostEl.style.height = `${Math.max(200, initialRect.height + dy)}px`;
+    } else if (moveType === 'resize-bottom-right') {
+      hostEl.style.width = `${Math.max(250, initialRect.width + dx)}px`;
+      hostEl.style.height = `${Math.max(200, initialRect.height + dy)}px`;
+    }
   }
 
-  function dragEnd() {
-    isDragging = false;
-    document.removeEventListener('mousemove', drag);
-    document.removeEventListener('mouseup', dragEnd);
+  function stop() {
+    if (!isMoving) return;
+    isMoving = false;
+    moveType = null;
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', stop);
+    document.body.style.userSelect = '';
     saveWindowState();
   }
 
-  // Resize Observer for Host
+  // Attach Listeners
+  dragHandle.addEventListener('mousedown', (e) => start(e, 'drag'));
+  if (handles.left) handles.left.addEventListener('mousedown', (e) => start(e, 'resize-left'));
+  if (handles.right) handles.right.addEventListener('mousedown', (e) => start(e, 'resize-right'));
+  if (handles.bottom) handles.bottom.addEventListener('mousedown', (e) => start(e, 'resize-bottom'));
+  if (handles.bottomRight) handles.bottomRight.addEventListener('mousedown', (e) => start(e, 'resize-bottom-right'));
+
+  // Keep observer for visibility/system changes
   const resizeObserver = new ResizeObserver(() => {
-    saveWindowState();
+    if (!isMoving) saveWindowState();
   });
   resizeObserver.observe(hostEl);
 }

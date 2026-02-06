@@ -100,19 +100,20 @@ async function handleSummarize(request) {
   ];
 
   // For popup, we'll do non-streaming for simplicity but can be changed
+  const body = prepareRequestBody(model, {
+    messages: messages,
+    temperature: 0.7,
+    max_tokens: 10000,
+    stream: false
+  });
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 2000,
-      stream: false
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
@@ -132,19 +133,20 @@ async function handleChat(request) {
 
   const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
 
+  const body = prepareRequestBody(model, {
+    messages: request.messages,
+    temperature: 0.7,
+    max_tokens: 10000,
+    stream: false
+  });
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
-    body: JSON.stringify({
-      model: model,
-      messages: request.messages,
-      temperature: 0.7,
-      max_tokens: 4000,
-      stream: false
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
@@ -170,19 +172,20 @@ async function handleStreamRequest(request, sender) {
   const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
 
   try {
+    const body = prepareRequestBody(model, {
+      messages: request.messages,
+      temperature: 0.7,
+      max_tokens: 10000,
+      stream: true
+    });
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: model,
-        messages: request.messages,
-        temperature: 0.7,
-        max_tokens: 4000,
-        stream: true
-      })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -268,19 +271,20 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
   const targetTabId = sender?.tab?.id;
 
   try {
+    const body = prepareRequestBody(model, {
+      messages: request.messages,
+      temperature: 0.7,
+      max_tokens: 10000,
+      stream: true
+    });
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: model,
-        messages: request.messages,
-        temperature: 0.7,
-        max_tokens: 2000,
-        stream: true
-      })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -354,4 +358,26 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
       chrome.runtime.sendMessage({ action: 'popupStreamError', error: errorMsg });
     }
   }
+}
+// Helper to handle model-specific parameters (e.g., o1/o3 reasoning models)
+function prepareRequestBody(model, baseParams) {
+  // Check if it's a reasoning model (o1, o3, etc.)
+  const isReasoningModel =
+    model.startsWith('o1-') ||
+    model.startsWith('o3-') ||
+    model.includes('reasoning') ||
+    model.includes('5.'); // User mentioned 5.2-pro
+
+  const body = { ...baseParams, model };
+
+  if (isReasoningModel) {
+    if (body.max_tokens) {
+      body.max_completion_tokens = body.max_tokens;
+      delete body.max_tokens;
+    }
+    // Reasoning models usually don't support temperature
+    delete body.temperature;
+  }
+
+  return body;
 }
