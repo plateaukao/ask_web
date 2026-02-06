@@ -36,9 +36,22 @@ async function loadSettings() {
   // Load templates
   templates = await getTemplates();
   renderTemplates();
+
+  // Load theme
+  const theme = await getTheme();
+  document.querySelector(`input[name="theme"][value="${theme}"]`).checked = true;
+  await initTheme(); // Apply immediately
 }
 
 function setupEventListeners() {
+  // Theme change
+  document.querySelectorAll('input[name="theme"]').forEach(radio => {
+    radio.addEventListener('change', async (e) => {
+      await setTheme(e.target.value);
+      showStatus('Theme saved', 'success');
+    });
+  });
+
   // Toggle API key visibility
   toggleKeyBtn.addEventListener('click', () => {
     const isPassword = apiKeyInput.type === 'password';

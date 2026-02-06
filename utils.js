@@ -3,8 +3,33 @@ const StorageKeys = {
   API_KEY: 'openai_api_key',
   MODEL: 'openai_model',
   TEMPLATES: 'prompt_templates',
-  DEFAULT_TEMPLATE: 'default_template'
+  DEFAULT_TEMPLATE: 'default_template',
+  THEME: 'theme'
 };
+
+// Theme Helper
+async function initTheme() {
+  const theme = await getTheme();
+  applyTheme(theme);
+}
+
+async function getTheme() {
+  const result = await getStorage([StorageKeys.THEME]);
+  return result[StorageKeys.THEME] || 'dark';
+}
+
+async function setTheme(theme) {
+  await setStorage({ [StorageKeys.THEME]: theme });
+  applyTheme(theme);
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
 
 const DefaultModels = [
   { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro (Latest)' },

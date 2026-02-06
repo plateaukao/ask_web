@@ -3,15 +3,14 @@
 let pageData = null;
 let templates = [];
 let isStreaming = false;
-let streamContent = '';
+let currentTabId = null;
 
 // DOM Elements
-const pageTitleEl = document.getElementById('pageTitle');
-const pageUrlEl = document.getElementById('pageUrl');
 const templateSelect = document.getElementById('templateSelect');
 const summarizeBtn = document.getElementById('summarizeBtn');
 const chatBtn = document.getElementById('chatBtn');
 const settingsBtn = document.getElementById('settingsBtn');
+const popoutBtn = document.getElementById('popoutBtn');
 const resultArea = document.getElementById('resultArea');
 const resultContent = document.getElementById('resultContent');
 const copyBtn = document.getElementById('copyBtn');
@@ -21,6 +20,7 @@ const errorMessage = document.getElementById('errorMessage');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  await initTheme();
   await loadTemplates();
   await extractPageContent();
   setupEventListeners();
@@ -40,17 +40,32 @@ async function loadTemplates() {
 
 async function extractPageContent() {
   try {
-    // Get the active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let tab;
+
+    // Check if we are in a popped-out window with a specific tab ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabIdParam = urlParams.get('tabId');
+
+    if (tabIdParam) {
+      try {
+        tab = await chrome.tabs.get(parseInt(tabIdParam));
+      } catch (e) {
+        console.warn('Original tab not found');
+      }
+    }
+
+    // Fallback to active tab in current window
+    if (!tab) {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      tab = tabs[0];
+    }
 
     if (!tab) {
       showError('No active tab found');
       return;
     }
 
-    // Update page info immediately
-    pageTitleEl.textContent = tab.title || 'Untitled Page';
-    pageUrlEl.textContent = tab.url || '';
+    currentTabId = tab.id;
 
     // Inject and execute content script to extract content
     const results = await chrome.scripting.executeScript({
@@ -60,7 +75,6 @@ async function extractPageContent() {
 
     if (results && results[0] && results[0].result) {
       pageData = results[0].result;
-      pageTitleEl.textContent = pageData.title || tab.title || 'Untitled Page';
     } else {
       // Use basic tab info if extraction fails
       pageData = {
@@ -80,8 +94,6 @@ async function extractPageContent() {
       content: '',
       description: ''
     };
-    pageTitleEl.textContent = pageData.title;
-    pageUrlEl.textContent = pageData.url;
   }
 }
 
@@ -124,6 +136,19 @@ function setupEventListeners() {
     chrome.runtime.openOptionsPage();
   });
 
+  // Pop out button
+  popoutBtn.addEventListener('click', () => {
+    if (currentTabId) {
+      chrome.windows.create({
+        url: `popup.html?tabId=${currentTabId}`,
+        type: 'popup',
+        width: 400,
+        height: 600
+      });
+      window.close(); // Close the current popup
+    }
+  });
+
   // Summarize button
   summarizeBtn.addEventListener('click', handleSummarize);
 
@@ -149,14 +174,15 @@ function setupStreamListener() {
 
 function handleStreamChunk(content) {
   streamContent += content;
-  renderMarkdownResult(streamContent);
+  renderMarkdownResult(streamContent, true);
 }
 
 function handleStreamEnd() {
   isStreaming = false;
   summarizeBtn.disabled = false;
   chatBtn.disabled = false;
-  streamContent = '';
+  // Re-render without cursor
+  renderMarkdownResult(streamContent, false);
 }
 
 function handleStreamError(error) {
@@ -254,7 +280,9 @@ function showStreamingResult() {
   chatBtn.disabled = true;
 }
 
-function renderMarkdownResult(text) {
+function renderMarkdownResult(text, showCursor = false) {
+  const cursorHtml = showCursor ? '<span class="cursor-blink">▊</span>' : '';
+
   if (typeof marked !== 'undefined') {
     marked.setOptions({
       breaks: true,
@@ -262,26 +290,33 @@ function renderMarkdownResult(text) {
       headerIds: false,
       mangle: false
     });
-    resultContent.innerHTML = marked.parse(text) + '<span class="cursor-blink">▊</span>';
+    resultContent.innerHTML = marked.parse(text) + cursorHtml;
   } else {
     resultContent.textContent = text;
+    if (showCursor) {
+      resultContent.innerHTML += cursorHtml;
+    }
+  }
+
+  // Auto-resize if popped out
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('tabId')) {
+    // We are in a popped out window
+    const bodyHeight = document.body.scrollHeight;
+    const currentHeight = window.outerHeight;
+    // Calculate max available height (bottom of screen)
+    const maxFreeHeight = screen.availHeight - window.screenY - 20; // 20px buffer
+    const desiredHeight = Math.min(bodyHeight + 40, maxFreeHeight); // 40px for window chrome
+
+    if (desiredHeight > currentHeight) {
+      window.resizeTo(window.outerWidth, desiredHeight);
+    }
   }
 }
 
 function showResult(text) {
   hideAll();
-  // Render markdown if marked is available
-  if (typeof marked !== 'undefined') {
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-      headerIds: false,
-      mangle: false
-    });
-    resultContent.innerHTML = marked.parse(text);
-  } else {
-    resultContent.textContent = text;
-  }
+  renderMarkdownResult(text, false);
   resultArea.classList.remove('hidden');
   summarizeBtn.disabled = false;
   chatBtn.disabled = false;
