@@ -97,6 +97,7 @@ async function createFloatingWindow() {
       --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
       --radius-sm: 8px;
       --radius-md: 12px;
+      --markdown-table-border-color: var(--border-color);
             
       all: initial;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -329,6 +330,28 @@ async function createFloatingWindow() {
       border-radius: 4px;
       font-family: monospace;
     }
+
+    .result-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      border: 2px solid var(--markdown-table-border-color);
+    }
+
+    .result-content th,
+    .result-content td {
+      border: 2px solid var(--markdown-table-border-color);
+      padding: 8px;
+      text-align: left;
+    }
+
+    .result-content th {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    :host([data-theme="light"]) .result-content th {
+      background: rgba(0, 0, 0, 0.08);
+    }
     
     .hidden { display: none !important; }
     
@@ -426,7 +449,7 @@ async function createFloatingWindow() {
       </div>
       
       <div id="resultArea" class="result-area hidden">
-        <div id="resultContent"></div>
+        <div id="resultContent" class="result-content"></div>
       </div>
       
       <div id="loading" class="hidden" style="text-align: center; color: var(--text-secondary);">

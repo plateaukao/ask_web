@@ -14,6 +14,7 @@
   --radius-sm: 8px;
   --radius-md: 12px;
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --markdown-table-border-color: var(--border-color);
 }
 
 :root[data-theme="light"] {
@@ -293,6 +294,28 @@ body {
   padding-left: 12px;
   margin: 8px 0;
   color: var(--text-secondary);
+}
+
+.result-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  border: 2px solid var(--markdown-table-border-color);
+}
+
+.result-content th,
+.result-content td {
+  border: 2px solid var(--markdown-table-border-color);
+  padding: 8px;
+  text-align: left;
+}
+
+.result-content th {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="light"] .result-content th {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Loading */

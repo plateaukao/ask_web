@@ -20,6 +20,7 @@
   --radius-xl: 20px;
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --sidebar-width: 320px;
+  --markdown-table-border-color: var(--border-color);
 }
 
 :root[data-theme="light"] {
@@ -495,17 +496,22 @@ body {
   border-collapse: collapse;
   margin: 8px 0;
   width: 100%;
+  border: 2px solid var(--markdown-table-border-color);
 }
 
 .message-content th,
 .message-content td {
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--markdown-table-border-color);
   padding: 8px;
   text-align: left;
 }
 
 .message-content th {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="light"] .message-content th {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Streaming Cursor */
