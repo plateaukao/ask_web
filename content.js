@@ -578,8 +578,13 @@ async function registerShortcuts() {
   });
 
   window.addEventListener('keydown', (e) => {
+    // Handle Esc to hide
+    if (e.key === 'Escape' && isVisible) {
+      toggleFloatingWindow();
+      return;
+    }
+
     // Ignore if typing in an input
-    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
     for (const t of templates) {
       if (!t.shortcut) continue;
