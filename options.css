@@ -33,6 +33,23 @@
   --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.15);
 }
 
+:root[data-theme="light"] .btn,
+:root[data-theme="light"] .btn-primary,
+:root[data-theme="light"] .btn-secondary,
+:root[data-theme="light"] .btn-icon {
+  background: #ffffff !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+:root[data-theme="light"] .btn:hover,
+:root[data-theme="light"] .btn-icon:hover {
+  background: var(--bg-primary) !important;
+  border-color: var(--accent-primary) !important;
+}
+
 /* Theme Options */
 .theme-options {
   display: flex;

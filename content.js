@@ -120,6 +120,23 @@ async function createFloatingWindow() {
       --border-color: #e2e8f0;
       --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.05);
     }
+
+    :host([data-theme="light"]) .btn,
+    :host([data-theme="light"]) .btn-primary,
+    :host([data-theme="light"]) .btn-secondary,
+    :host([data-theme="light"]) .btn-icon {
+      background: #ffffff !important;
+      border: 1px solid var(--border-color) !important;
+      color: var(--text-primary) !important;
+      box-shadow: none !important;
+      background-image: none !important;
+    }
+
+    :host([data-theme="light"]) .btn:hover,
+    :host([data-theme="light"]) .btn-icon:hover {
+      background: var(--bg-secondary) !important;
+      border-color: var(--accent-primary) !important;
+    }
     
     * { box-sizing: border-box; }
 
@@ -505,11 +522,6 @@ async function loadTemplates(root) {
   // Let's keep Chat as Primary for now, or maybe make Summarize primary? 
   // User asked for "individual action buttons... aligned with chat button".
   chatBtn.textContent = 'Chat';
-  chatBtn.innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    </svg> Chat
-  `;
   chatBtn.id = 'chatBtn';
   chatBtn.addEventListener('click', () => handleChatClick(root));
 

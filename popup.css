@@ -30,6 +30,23 @@
   --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+:root[data-theme="light"] .btn,
+:root[data-theme="light"] .btn-primary,
+:root[data-theme="light"] .btn-secondary,
+:root[data-theme="light"] .btn-icon {
+  background: #ffffff !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+:root[data-theme="light"] .btn:hover,
+:root[data-theme="light"] .btn-icon:hover {
+  background: var(--bg-secondary) !important;
+  border-color: var(--accent-primary) !important;
+}
+
 * {
   margin: 0;
   padding: 0;
