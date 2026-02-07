@@ -18,15 +18,13 @@ Ask Web is a Chrome extension that lets you read any web page through an AI assi
 ## Screenshots
 
 ### Floating Window (Main UI)
-<!-- Screenshot: Insert the main floating window UI image here -->
+<img width="745" height="585" alt="image" src="https://github.com/user-attachments/assets/24794f76-c48c-484b-8331-f99b54806609" />
 
 ### Settings Page
-<!-- Screenshot: Insert the options/settings page image here -->
+<img width="573" height="827" alt="image" src="https://github.com/user-attachments/assets/86b13ad2-9aeb-427f-b880-af3cfb276a94" />
 
 ### Chat Window
-<!-- Screenshot: Insert the chat tab image here -->
-
-> Tip: Place your image files under `docs/images/` (or any folder you prefer) and update the Markdown above, e.g. `![Floating Window](docs/images/floating-window.png)`.
+<img width="753" height="615" alt="image" src="https://github.com/user-attachments/assets/a60465fc-cdaa-4eb2-b519-6f86a41f5cf1" />
 
 ---
 
