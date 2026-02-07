@@ -86,7 +86,7 @@ async function handleSummarize(request) {
     throw new Error('Please set your OpenAI API key in the extension settings');
   }
 
-  const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
+  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.2-pro';
 
   const messages = [
     {
@@ -131,7 +131,7 @@ async function handleChat(request) {
     throw new Error('Please set your OpenAI API key in the extension settings');
   }
 
-  const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
+  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.2-pro';
 
   const body = prepareRequestBody(model, {
     messages: request.messages,
@@ -169,7 +169,7 @@ async function handleStreamRequest(request, sender) {
     return;
   }
 
-  const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
+  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.2-pro';
 
   try {
     const body = prepareRequestBody(model, {
@@ -266,7 +266,7 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     content: ''
   };
 
-  const model = await getStorageValue('openai_model') || 'gpt-5.2-pro';
+  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.2-pro';
   // Determine target: sender tab (content script) or runtime (popup)
   const targetTabId = sender?.tab?.id;
 

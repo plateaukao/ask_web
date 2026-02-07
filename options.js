@@ -12,6 +12,8 @@ const addTemplateBtn = document.getElementById('addTemplate');
 const templateModal = document.getElementById('templateModal');
 const modalTitle = document.getElementById('modalTitle');
 const templateNameInput = document.getElementById('templateName');
+const templateModelSelect = document.getElementById('templateModel');
+const templateShortcutInput = document.getElementById('templateShortcut');
 const templatePromptInput = document.getElementById('templatePrompt');
 const saveTemplateBtn = document.getElementById('saveTemplate');
 const cancelTemplateBtn = document.getElementById('cancelTemplate');
@@ -96,6 +98,34 @@ function setupEventListeners() {
     if (e.target === templateModal) closeModal();
   });
 
+  // Shortcut Recording
+  templateShortcutInput.addEventListener('keydown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Ignore alone modifier keys
+    if (['Alt', 'Control', 'Shift', 'Meta'].includes(e.key)) return;
+
+    const parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.metaKey) parts.push('Meta');
+
+    // Key names like "s" should be uppercase
+    let key = e.key;
+    if (key === ' ') key = 'Space';
+    if (key.length === 1) key = key.toUpperCase();
+
+    parts.push(key);
+    templateShortcutInput.value = parts.join('+');
+  });
+
+  templateShortcutInput.addEventListener('click', () => {
+    templateShortcutInput.value = '';
+    templateShortcutInput.placeholder = 'Press keys...';
+  });
+
   // Save template
   saveTemplateBtn.addEventListener('click', saveTemplate);
 }
@@ -107,8 +137,12 @@ function renderTemplates() {
         <div class="template-name">
           ${escapeHtml(template.name)}
           ${template.isDefault ? '<span class="template-badge">Built-in</span>' : ''}
+          ${template.shortcut ? `<span class="shortcut-badge">${escapeHtml(template.shortcut)}</span>` : ''}
         </div>
-        <div class="template-preview">${escapeHtml(template.prompt.substring(0, 60))}...</div>
+        <div class="template-preview">
+          ${template.model ? `<span class="model-tag">${escapeHtml(template.model)}</span> ` : ''}
+          ${escapeHtml(template.prompt.substring(0, 60))}...
+        </div>
       </div>
       <div class="template-actions">
         <button class="btn-icon edit-template" data-id="${template.id}" title="Edit">
@@ -146,6 +180,8 @@ function editTemplate(id) {
   editingTemplateId = id;
   modalTitle.textContent = 'Edit Template';
   templateNameInput.value = template.name;
+  templateModelSelect.value = template.model || '';
+  templateShortcutInput.value = template.shortcut || '';
   templatePromptInput.value = template.prompt;
   templateModal.classList.add('active');
 }
@@ -153,11 +189,20 @@ function editTemplate(id) {
 async function saveTemplate() {
   const name = templateNameInput.value.trim();
   const prompt = templatePromptInput.value.trim();
+  const model = templateModelSelect.value;
+  const shortcut = templateShortcutInput.value;
 
   if (!name || !prompt) {
     showStatus('Please fill in all fields', 'error');
     return;
   }
+
+  const templateData = {
+    name,
+    prompt,
+    model: model || undefined,
+    shortcut: shortcut || undefined
+  };
 
   if (editingTemplateId) {
     // Update existing template
@@ -165,16 +210,14 @@ async function saveTemplate() {
     if (index !== -1) {
       templates[index] = {
         ...templates[index],
-        name,
-        prompt
+        ...templateData
       };
     }
   } else {
     // Add new template
     templates.push({
       id: generateId(),
-      name,
-      prompt,
+      ...templateData,
       isDefault: false
     });
   }

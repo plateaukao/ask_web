@@ -10,6 +10,7 @@ function init() {
   window.hasAskWebListeners = true;
 
   console.log('[Ask Web] Content script loaded');
+  registerShortcuts(); // Initialize global shortcuts
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // ...
     if (request.action === 'toggleFloatingWindow') {
@@ -490,9 +491,10 @@ async function loadTemplates(root) {
     // Store prompt in dataset
     btn.dataset.prompt = t.prompt;
     btn.dataset.action = 'template';
+    btn.dataset.model = t.model || '';
 
     // Attach click listener directly
-    btn.addEventListener('click', () => handleTemplateClick(root, t.prompt));
+    btn.addEventListener('click', () => handleTemplateClick(root, t.prompt, t.model));
 
     container.appendChild(btn);
   });
@@ -515,7 +517,7 @@ async function loadTemplates(root) {
 }
 
 // Logic for Template Clicks
-async function handleTemplateClick(root, promptTemplate) {
+async function handleTemplateClick(root, promptTemplate, modelOverride) {
   const resultArea = root.getElementById('resultArea');
   const resultContent = root.getElementById('resultContent');
   const loading = root.getElementById('loading');
@@ -536,7 +538,8 @@ async function handleTemplateClick(root, promptTemplate) {
       messages: [{
         role: 'user',
         content: prompt
-      }]
+      }],
+      model: modelOverride // Pass optional model override
     });
 
     // Show result area immediately for streaming
@@ -549,6 +552,67 @@ async function handleTemplateClick(root, promptTemplate) {
     resultContent.textContent = 'Error: ' + err.message;
     resultArea.classList.remove('hidden');
   }
+}
+
+// Shortcut Support
+async function registerShortcuts() {
+  // Listen for storage changes to update shortcuts in real-time if settings change
+  let templates = await getTemplates();
+
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes[StorageKeys.TEMPLATES]) {
+      templates = changes[StorageKeys.TEMPLATES].newValue;
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    // Ignore if typing in an input
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+    for (const t of templates) {
+      if (!t.shortcut) continue;
+
+      const parts = t.shortcut.split('+');
+      const keyStr = parts.pop().toUpperCase();
+
+      const ctrl = parts.includes('Ctrl');
+      const alt = parts.includes('Alt');
+      const shift = parts.includes('Shift');
+      const meta = parts.includes('Meta');
+
+      const match = e.key.toUpperCase() === keyStr &&
+        e.ctrlKey === ctrl &&
+        e.altKey === alt &&
+        e.shiftKey === shift &&
+        e.metaKey === meta;
+
+      if (match) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerTemplateAction(t);
+        break;
+      }
+    }
+  });
+}
+
+async function triggerTemplateAction(template) {
+  if (!isVisible) {
+    await toggleFloatingWindow();
+  }
+
+  // Wait for shadowRoot to be initialized
+  const maxWait = 20; // 2 seconds
+  let waited = 0;
+  const timer = setInterval(() => {
+    if (shadowRoot || waited > maxWait) {
+      clearInterval(timer);
+      if (shadowRoot) {
+        handleTemplateClick(shadowRoot, template.prompt, template.model);
+      }
+    }
+    waited++;
+  }, 100);
 }
 
 async function handleChatClick(root) {

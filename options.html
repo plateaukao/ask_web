@@ -114,6 +114,22 @@
               <input type="text" id="templateName" placeholder="My Custom Template">
             </div>
             <div class="form-group">
+              <label for="templateModel">Model Overlay (Optional)</label>
+              <select id="templateModel">
+                <option value="">Use Global Default</option>
+                <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
+                <option value="gpt-5.2">GPT-5.2</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                <option value="o1-preview">o1-preview</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="templateShortcut">Keyboard Shortcut (Optional)</label>
+              <input type="text" id="templateShortcut" placeholder="Click to record (e.g. Alt+S)" readonly>
+              <small>Click to record. Use modifiers like Alt or Ctrl.</small>
+            </div>
+            <div class="form-group">
               <label for="templatePrompt">Prompt</label>
               <textarea id="templatePrompt" rows="6"
                 placeholder="Enter your prompt here. Use {{content}} as placeholder for web content."></textarea>
