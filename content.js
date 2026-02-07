@@ -653,15 +653,28 @@ async function toggleFloatingWindow() {
       document.body.appendChild(floatingWindow);
     }
 
-    isVisible = !isVisible;
-    floatingWindow.style.display = isVisible ? 'block' : 'none';
+    if (isVisible) {
+      hideFloatingWindow();
+    } else {
+      isVisible = true;
+      floatingWindow.style.display = 'block';
+    }
   }
+}
+
+function hideFloatingWindow() {
+  if (!floatingWindow) return;
+  saveWindowState();
+  isVisible = false;
+  floatingWindow.style.display = 'none';
 }
 
 // Persistence Helper
 function saveWindowState() {
   if (!floatingWindow) return;
   const rect = floatingWindow.getBoundingClientRect();
+  if (floatingWindow.style.display === 'none') return;
+  if (rect.width === 0 || rect.height === 0) return;
   const state = {
     x: rect.left,
     y: rect.top,
@@ -768,8 +781,7 @@ function setupEventListeners(root) {
   });
 
   root.getElementById('closeBtn').addEventListener('click', () => {
-    isVisible = false;
-    floatingWindow.style.display = 'none';
+    hideFloatingWindow();
   });
 
   root.getElementById('settingsBtn').addEventListener('click', () => {
