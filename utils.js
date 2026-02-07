@@ -2,10 +2,13 @@
 var StorageKeys = StorageKeys || {
   API_KEY: 'openai_api_key',
   MODEL: 'openai_model',
+  API_BASE_URL: 'openai_api_base_url',
   TEMPLATES: 'prompt_templates',
   DEFAULT_TEMPLATE: 'default_template',
   THEME: 'theme'
 };
+
+const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
 
 // Theme Helper
 async function initTheme() {
@@ -82,6 +85,21 @@ async function getApiKey() {
 
 async function setApiKey(key) {
   await setStorage({ [StorageKeys.API_KEY]: key });
+}
+
+async function getApiBaseUrl() {
+  const result = await getStorage([StorageKeys.API_BASE_URL]);
+  return normalizeApiBaseUrl(result[StorageKeys.API_BASE_URL]);
+}
+
+async function setApiBaseUrl(url) {
+  await setStorage({ [StorageKeys.API_BASE_URL]: normalizeApiBaseUrl(url) });
+}
+
+function normalizeApiBaseUrl(url) {
+  const trimmed = (url || '').trim();
+  const base = trimmed || DEFAULT_API_BASE_URL;
+  return base.replace(/\/+$/, '');
 }
 
 async function getModel() {

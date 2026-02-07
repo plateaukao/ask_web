@@ -9,6 +9,27 @@ async function getStorageValue(key) {
   });
 }
 
+const API_BASE_KEY = 'openai_api_base_url';
+const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
+
+async function getApiBaseUrl() {
+  const stored = await getStorageValue(API_BASE_KEY);
+  return normalizeApiBaseUrl(stored);
+}
+
+function normalizeApiBaseUrl(url) {
+  const trimmed = (url || '').trim();
+  const base = trimmed || DEFAULT_API_BASE_URL;
+  return base.replace(/\/+$/, '');
+}
+
+async function getApiEndpoint(path = '') {
+  const base = await getApiBaseUrl();
+  if (!path) return base;
+  const normalizedPath = '/' + path.replace(/^\/+/, '');
+  return `${base}${normalizedPath}`;
+}
+
 // State tracking
 let popupState = {
   isStreaming: false,
@@ -107,7 +128,8 @@ async function handleSummarize(request) {
     stream: false
   });
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const endpoint = await getApiEndpoint('chat/completions');
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -140,7 +162,8 @@ async function handleChat(request) {
     stream: false
   });
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const endpoint = await getApiEndpoint('chat/completions');
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -179,7 +202,8 @@ async function handleStreamRequest(request, sender) {
       stream: true
     });
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const endpoint = await getApiEndpoint('chat/completions');
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -278,7 +302,8 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
       stream: true
     });
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const endpoint = await getApiEndpoint('chat/completions');
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -6,6 +6,7 @@ let editingTemplateId = null;
 // DOM Elements
 const apiKeyInput = document.getElementById('apiKey');
 const toggleKeyBtn = document.getElementById('toggleKey');
+const apiBaseUrlInput = document.getElementById('apiBaseUrl');
 const modelSelect = document.getElementById('model');
 const templateList = document.getElementById('templateList');
 const addTemplateBtn = document.getElementById('addTemplate');
@@ -30,6 +31,9 @@ async function loadSettings() {
   // Load API key
   const apiKey = await getApiKey();
   apiKeyInput.value = apiKey;
+
+  const apiBaseUrl = await getApiBaseUrl();
+  apiBaseUrlInput.value = apiBaseUrl;
 
   // Load model
   const model = await getModel();
@@ -73,6 +77,12 @@ function setupEventListeners() {
   apiKeyInput.addEventListener('change', async () => {
     await setApiKey(apiKeyInput.value);
     showStatus('API key saved', 'success');
+  });
+
+  // Save API base URL on change
+  apiBaseUrlInput.addEventListener('change', async () => {
+    await setApiBaseUrl(apiBaseUrlInput.value);
+    showStatus('API base URL saved', 'success');
   });
 
   // Save model on change

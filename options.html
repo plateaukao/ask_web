@@ -47,6 +47,12 @@
         </div>
 
         <div class="form-group">
+          <label for="apiBaseUrl">API Base URL</label>
+          <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1" autocomplete="off">
+          <small>Point to any compatible OpenAI-style endpoint (ending with /v1). Leave empty for the default.</small>
+        </div>
+
+        <div class="form-group">
           <label for="model">Model</label>
           <input type="text" id="model" list="modelList" placeholder="Enter or select a model">
           <datalist id="modelList">
