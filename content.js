@@ -105,7 +105,7 @@ async function createFloatingWindow() {
       /* Remove CSS Resize */
       overflow: hidden;
       border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); /* Host shadow */
+      box-shadow: none; /* Make it clean, no shadow */
     }
 
     :host([data-theme="light"]) {
@@ -460,6 +460,43 @@ async function createFloatingWindow() {
         padding: 40px 20px;
         color: var(--text-muted);
     }
+
+    /* Copy Actions */
+    .copy-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      justify-content: flex-end;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .copy-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .copy-btn:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent-primary);
+      color: var(--text-primary);
+    }
+
+    .copy-btn.copied {
+      background: rgba(72, 187, 120, 0.1);
+      border-color: #48bb78;
+      color: #48bb78;
+    }
+
   `;
     shadowRoot.appendChild(style);
 
@@ -506,6 +543,9 @@ async function createFloatingWindow() {
       
       <div id="resultArea" class="result-area hidden">
         <div id="resultContent" class="result-content"></div>
+        <div id="copyActions" class="copy-actions hidden">
+           <!-- Buttons will be injected here -->
+        </div>
       </div>
       
       <div id="historyList" class="history-list hidden">
@@ -624,6 +664,7 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
 
   // Reset state
   resultContent.innerHTML = '';
+  root.getElementById('copyActions').classList.add('hidden');
   currentStreamContent = '';
 
   resultArea.classList.add('hidden');
@@ -924,6 +965,7 @@ async function handleStreamEnd(root) {
   // Save to history
   if (currentStreamContent) {
     await saveContentHistory(currentStreamContent);
+    renderCopyButtons(root);
   }
 }
 
@@ -978,6 +1020,7 @@ async function loadLatestContent(root) {
 
     resultArea.classList.remove('hidden');
     currentStreamContent = latest.content; // Restore state
+    renderCopyButtons(root);
   }
 }
 
@@ -1048,6 +1091,7 @@ function restoreHistoryItem(root, item) {
   }
 
   currentStreamContent = item.content;
+  renderCopyButtons(root);
 
   historyList.classList.add('hidden');
   resultArea.classList.remove('hidden');
@@ -1084,6 +1128,71 @@ function renderMarkdown(text, root, showCursor) {
       resultContent.innerHTML += cursorHtml;
     }
   }
+}
+
+function renderCopyButtons(root) {
+  const copyActions = root.getElementById('copyActions');
+  if (!copyActions) return;
+
+  copyActions.innerHTML = '';
+  copyActions.classList.remove('hidden');
+
+  // Helper to create button
+  const createBtn = (title, iconSvg, onClick) => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = title;
+    btn.innerHTML = iconSvg;
+    btn.addEventListener('click', async () => {
+      await onClick();
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      `;
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+    return btn;
+  };
+
+  // Markdown Button (Code Brackets Icon)
+  const mdIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`;
+  const mdBtn = createBtn('Copy Markdown', mdIcon, async () => {
+    await navigator.clipboard.writeText(currentStreamContent);
+  });
+
+  // Rich Text Button (File Text Icon)
+  const richIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+  const richTextBtn = createBtn('Copy Rich Text', richIcon, async () => {
+    let htmlContent = '';
+    if (typeof marked !== 'undefined') {
+      htmlContent = marked.parse(currentStreamContent);
+    } else {
+      htmlContent = `<p>${currentStreamContent.replace(/\n\n/g, '</p><p>')}</p>`;
+    }
+
+    try {
+      const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+      const blobText = new Blob([currentStreamContent], { type: 'text/plain' });
+      const data = [new ClipboardItem({
+        'text/html': blobHtml,
+        'text/plain': blobText
+      })];
+      await navigator.clipboard.write(data);
+    } catch (err) {
+      console.error('Failed to copy rich text:', err);
+      // Fallback
+      await navigator.clipboard.writeText(htmlContent);
+    }
+  });
+
+  copyActions.appendChild(mdBtn);
+  copyActions.appendChild(richTextBtn);
 }
 
 // Content Extraction Strategy
