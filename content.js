@@ -398,12 +398,67 @@ async function createFloatingWindow() {
       cursor: ns-resize;
     }
 
+
     .resize-handle.bottom-right {
       right: 0;
       bottom: 0;
       width: 16px;
       height: 16px;
       cursor: nwse-resize;
+    }
+
+    /* History List */
+    .history-list {
+      position: absolute;
+      top: 60px; /* Below header */
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      z-index: 10;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .history-item {
+      padding: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .history-item:hover {
+      border-color: var(--accent-primary);
+      transform: translateY(-1px);
+    }
+
+    .history-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .history-preview {
+      color: var(--text-primary);
+      font-size: 13px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-muted);
     }
   `;
     shadowRoot.appendChild(style);
@@ -434,6 +489,12 @@ async function createFloatingWindow() {
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
+        <button id="historyBtn" class="btn-icon" title="History">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+        </button>
         <button class="btn-icon" id="closeBtn" title="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -451,6 +512,11 @@ async function createFloatingWindow() {
       <div id="resultArea" class="result-area hidden">
         <div id="resultContent" class="result-content"></div>
       </div>
+      
+      <div id="historyList" class="history-list hidden">
+         <!-- History items injected here -->
+      </div>
+
       
       <div id="loading" class="hidden" style="text-align: center; color: var(--text-secondary);">
         <div class="spinner" style="
@@ -477,6 +543,10 @@ async function createFloatingWindow() {
 
     // Load Templates
     await loadTemplates(shadowRoot);
+
+    // Load History
+    await loadLatestContent(shadowRoot);
+
 
     // Behavior
     setupDragAndResize(floatingWindow, container);
@@ -799,31 +869,175 @@ function setupEventListeners(root) {
     } else if (request.action === 'popupStreamEnd') {
       handleStreamEnd(root);
     } else if (request.action === 'popupStreamError') {
-      handleStreamError(request.error, root);
+      // Handle error
+      const loading = root.getElementById('loading');
+      if (loading) loading.classList.add('hidden');
+
+      const resultContent = root.getElementById('resultContent');
+      if (resultContent) {
+        resultContent.innerHTML += `<br><span style="color:red">Error: ${request.error}</span>`;
+      }
     }
   });
 
-  root.getElementById('closeBtn').addEventListener('click', () => {
-    hideFloatingWindow();
-  });
+  root.getElementById('closeBtn').addEventListener('click', hideFloatingWindow);
 
-  root.getElementById('settingsBtn').addEventListener('click', () => {
+  const settingsBtn = root.getElementById('settingsBtn');
+  settingsBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ action: 'openOptions' });
   });
 
-  // NOTE: Template buttons and Chat button listeners are added in loadTemplates()
+  const historyBtn = root.getElementById('historyBtn');
+  historyBtn.addEventListener('click', () => toggleHistory(root));
+}
+
+async function handleStreamEnd(root) {
+  const loading = root.getElementById('loading');
+  loading.classList.add('hidden');
+
+  // Clean up cursor
+  const resultContent = root.getElementById('resultContent');
+  const cursor = resultContent.querySelector('.cursor-blink');
+  if (cursor) cursor.remove();
+
+  // Save to history
+  if (currentStreamContent) {
+    await saveContentHistory(currentStreamContent);
+  }
+}
+
+// History Functions
+function getHistoryKey() {
+  return `history_${window.location.href}`;
+}
+
+async function saveContentHistory(content) {
+  const key = getHistoryKey();
+  const data = await getStorageData([key]);
+  const history = data[key] || [];
+
+  // Create new entry
+  const entry = {
+    id: Date.now(),
+    timestamp: Date.now(),
+    content: content,
+    summary: content.substring(0, 150) + (content.length > 150 ? '...' : '')
+  };
+
+  // Add to top
+  history.unshift(entry);
+
+  // Keep last 10
+  if (history.length > 10) {
+    history.length = 10;
+  }
+
+  await chrome.storage.local.set({ [key]: history });
+}
+
+async function loadLatestContent(root) {
+  const key = getHistoryKey();
+  const data = await getStorageData([key]);
+  const history = data[key] || [];
+
+  if (history.length > 0) {
+    const latest = history[0];
+    const resultArea = root.getElementById('resultArea');
+    const resultContent = root.getElementById('resultContent');
+
+    try {
+      if (typeof marked !== 'undefined') {
+        resultContent.innerHTML = marked.parse(latest.content);
+      } else {
+        resultContent.textContent = latest.content;
+      }
+    } catch (e) {
+      resultContent.textContent = latest.content; // Fallback
+    }
+
+    resultArea.classList.remove('hidden');
+    currentStreamContent = latest.content; // Restore state
+  }
+}
+
+async function toggleHistory(root) {
+  const historyList = root.getElementById('historyList');
+  const resultArea = root.getElementById('resultArea');
+
+  if (historyList.classList.contains('hidden')) {
+    // Show History
+    await renderHistoryList(root);
+    historyList.classList.remove('hidden');
+    resultArea.classList.add('hidden');
+  } else {
+    // Hide History
+    historyList.classList.add('hidden');
+    // Show result if we have content
+    if (root.getElementById('resultContent').innerHTML) {
+      resultArea.classList.remove('hidden');
+    }
+  }
+}
+
+async function renderHistoryList(root) {
+  const key = getHistoryKey();
+  const data = await getStorageData([key]);
+  const history = data[key] || [];
+  const container = root.getElementById('historyList');
+
+  container.innerHTML = '';
+
+  if (history.length === 0) {
+    container.innerHTML = '<div class="empty-state">No history yet</div>';
+    return;
+  }
+
+  history.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+
+    const date = new Date(item.timestamp).toLocaleString();
+
+    div.innerHTML = `
+            <div class="history-meta">${date}</div>
+            <div class="history-preview">${item.summary.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+        `;
+
+    div.addEventListener('click', () => {
+      restoreHistoryItem(root, item);
+    });
+
+    container.appendChild(div);
+  });
+}
+
+function restoreHistoryItem(root, item) {
+  const resultArea = root.getElementById('resultArea');
+  const resultContent = root.getElementById('resultContent');
+  const historyList = root.getElementById('historyList');
+
+  try {
+    if (typeof marked !== 'undefined') {
+      resultContent.innerHTML = marked.parse(item.content);
+    } else {
+      resultContent.textContent = item.content;
+    }
+  } catch (e) {
+    resultContent.textContent = item.content;
+  }
+
+  currentStreamContent = item.content;
+
+  historyList.classList.add('hidden');
+  resultArea.classList.remove('hidden');
 }
 
 // Stream Helpers
-let currentStreamContent = '';
+var currentStreamContent = '';
 
 function appendStreamContent(content, root) {
   currentStreamContent += content;
   renderMarkdown(currentStreamContent, root, true);
-}
-
-function handleStreamEnd(root) {
-  renderMarkdown(currentStreamContent, root, false);
 }
 
 function handleStreamError(error, root) {
@@ -835,40 +1049,49 @@ function handleStreamError(error, root) {
 
 function renderMarkdown(text, root, showCursor) {
   const resultContent = root.getElementById('resultContent');
-  const cursorHtml = showCursor ? '<span style="display:inline-block; width:8px; height:14px; background:currentColor; animation:blink 1s infinite; vertical-align:middle; margin-left:2px;"></span>' : '';
+  const cursorHtml = showCursor ? '<span class="cursor-blink">▊</span>' : '';
 
   if (typeof marked !== 'undefined') {
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-      headerIds: false,
-      mangle: false
-    });
+    // Configure marked if needed
     resultContent.innerHTML = marked.parse(text) + cursorHtml;
   } else {
     resultContent.textContent = text;
     if (showCursor) {
+      // Simple text content doesn't handle HTML accumulation well if we use textContent
+      // But if we use innerHTML we need to escape.
+      // For now, assume marked is present as per manifest.
       resultContent.innerHTML += cursorHtml;
     }
   }
 }
 
-
-// Content Extraction Logic (Preserved)
+// Content Extraction Strategy
 function extractPageContent() {
-  let content = '';
-  // ... (Strategy 1-4 from original content.js) ...
-  // Simplified for brevity, assume we have it or import utils.js if shared?
-  // Since we replaced the file, we should copy the extraction logic back.
+  // 1. Try Selection
+  const selection = window.getSelection().toString().trim();
+  if (selection) {
+    return { title: document.title, url: window.location.href, content: selection };
+  }
 
-  // Strategy 1: Article
+  // 2. Try simple article detection
   const article = document.querySelector('article');
-  if (article) content = article.innerText;
+  if (article) {
+    return { title: document.title, url: window.location.href, content: article.innerText };
+  }
 
-  // Fallback
-  if (!content) content = document.body.innerText; // Simplified for MVP
+  // 3. Try main tag
+  const main = document.querySelector('main');
+  if (main) {
+    return { title: document.title, url: window.location.href, content: main.innerText };
+  }
 
-  return { title: document.title, url: window.location.href, content: content };
+  // 4. Fallback to body but try to exclude nav, header, footer if possible
+  // Clone body to manipulate
+  const bodyClone = document.body.cloneNode(true);
+  const scripts = bodyClone.querySelectorAll('script, style, nav, header, footer, noscript');
+  scripts.forEach(el => el.remove());
+
+  return { title: document.title, url: window.location.href, content: bodyClone.innerText.trim() };
 }
 
 init();
