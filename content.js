@@ -11,6 +11,7 @@ function init() {
 
   console.log('[Ask Web] Content script loaded');
   registerShortcuts(); // Initialize global shortcuts
+  registerSelectionListener(); // Initialize selection listener
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // ...
     if (request.action === 'toggleFloatingWindow') {
@@ -1225,3 +1226,219 @@ function extractPageContent() {
 }
 
 init();
+// Text Selection Logic
+let selectionIcon = null;
+let selectionIconShadow = null;
+let currentSelection = null;
+
+async function registerSelectionListener() {
+  // Listen for selection changes
+  document.addEventListener('mouseup', handleSelection);
+  document.addEventListener('keyup', handleSelection); // For keyboard selection
+  document.addEventListener('mousedown', (e) => {
+    // Hide icon on click elsewhere if not clicking the icon itself
+    if (selectionIcon && !selectionIcon.contains(e.target)) {
+      hideSelectionIcon();
+    }
+  });
+
+  // Listen for setting changes
+  let config = await getSelectionConfig();
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes[StorageKeys.ENABLE_SELECTION_ICON]) {
+      config.enabled = changes[StorageKeys.ENABLE_SELECTION_ICON].newValue;
+    }
+  });
+}
+
+async function handleSelection(e) {
+  const config = await getSelectionConfig();
+  if (!config.enabled) return;
+
+  const selection = window.getSelection();
+  const text = selection.toString().trim();
+
+  // Basic validation
+  if (!text || text.length < 2) {
+    hideSelectionIcon();
+    return;
+  }
+
+  // Check if inside input/textarea
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+    return; // Optional: might want to allow it in some cases, but usually annoying
+  }
+
+  // Store selection for action
+  currentSelection = {
+    text: text,
+    range: selection.getRangeAt(0).cloneRange()
+  };
+
+  // Show Icon
+  showSelectionIcon(currentSelection.range);
+}
+
+function showSelectionIcon(range) {
+  if (!selectionIcon) {
+    createSelectionIcon();
+  }
+
+  const rects = range.getClientRects();
+  if (rects.length === 0) return;
+  const lastRect = rects[rects.length - 1];
+
+  // Position relative to viewport since position: fixed
+  const top = lastRect.bottom + 10;
+  const left = lastRect.right;
+
+  selectionIcon.style.top = `${top}px`;
+  selectionIcon.style.left = `${left}px`;
+  selectionIcon.style.display = 'block';
+
+  // Ensure icon is within viewport
+  const iconRect = selectionIcon.getBoundingClientRect();
+  if (iconRect.right > window.innerWidth) {
+    selectionIcon.style.left = `${window.innerWidth - iconRect.width - 10}px`;
+  }
+}
+
+function hideSelectionIcon() {
+  if (selectionIcon) {
+    selectionIcon.style.display = 'none';
+  }
+}
+
+function createSelectionIcon() {
+  selectionIcon = document.createElement('div');
+  selectionIcon.id = 'ask-web-selection-icon';
+  selectionIcon.style.position = 'fixed';
+  selectionIcon.style.zIndex = '2147483647';
+  selectionIcon.style.display = 'none';
+  selectionIcon.style.cursor = 'pointer';
+
+  selectionIconShadow = selectionIcon.attachShadow({ mode: 'open' });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 50%;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+      cursor: pointer;
+    }
+    .icon:hover {
+      transform: scale(1.1);
+    }
+    svg {
+      color: white;
+      width: 18px;
+      height: 18px;
+    }
+  `;
+
+  const icon = document.createElement('div');
+  icon.className = 'icon';
+  icon.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+  `;
+
+  icon.addEventListener('mousedown', (e) => {
+    e.preventDefault(); // Prevent losing selection
+    e.stopPropagation();
+    handleSelectionIconClick();
+  });
+
+  selectionIconShadow.appendChild(style);
+  selectionIconShadow.appendChild(icon);
+
+  document.body.appendChild(selectionIcon);
+}
+
+async function handleSelectionIconClick() {
+  const config = await getSelectionConfig();
+  const selectionText = currentSelection.text;
+
+  // Get Context
+  const context = getSelectionContext(currentSelection.range);
+
+  // Prepare Prompt
+  // Replace {{selection}} and ensure context is added if not explicitly in prompt
+  let prompt = config.prompt;
+
+  // If prompt uses {{selection}}, put the selection there.
+  // We also want to provide context.
+  // Best approach: Construct a full prompt string that the user sees as the "User Prompt" to the model?
+  // Or inject it into the system prompt?
+  // The current `handleTemplateClick` sends `prompt` as the user message.
+
+  // Let's format the context nicely.
+  const fullContent = `Context before: "${context.before}"\n\nSelected Text: "${selectionText}"\n\nContext after: "${context.after}"`;
+
+  // If user prompt has {{selection}}, replace it.
+  // If user prompt has {{content}}, replace it with full context + selection?
+  // Let's replace {{selection}} with the selection.
+  // And replace {{content}} with selection (for backward compat if they use generic templates).
+
+  prompt = prompt.replace(/{{selection}}/g, selectionText);
+  prompt = prompt.replace(/{{content}}/g, selectionText);
+
+  // Append context to the prompt transparently or prefix it?
+  // "Using the following context: ... \n\n [User Prompt]"
+  const finalPrompt = `Context: ${context.before} [TARGET]${selectionText}[/TARGET] ${context.after}\n\n${prompt}`;
+
+  hideSelectionIcon();
+
+  // Open Floating Window
+  if (!isVisible) {
+    await toggleFloatingWindow();
+  }
+
+  // Wait for window to be ready
+  const maxWait = 20;
+  let waited = 0;
+  const timer = setInterval(() => {
+    if (shadowRoot || waited > maxWait) {
+      clearInterval(timer);
+      if (shadowRoot) {
+        // Trigger generic template handler but with our specific prompt
+        handleTemplateClick(shadowRoot, finalPrompt, config.model);
+      }
+    }
+    waited++;
+  }, 100);
+}
+
+function getSelectionContext(range, charCount = 300) {
+  // Simple context extraction
+  // We can use the range's containers
+
+  let before = '';
+  let after = '';
+
+  try {
+    const preRange = document.createRange();
+    preRange.setStartBefore(document.body.firstChild || document.body);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const preText = preRange.toString();
+    before = preText.slice(-charCount);
+
+    const postRange = document.createRange();
+    postRange.setStart(range.endContainer, range.endOffset);
+    postRange.setEndAfter(document.body.lastChild || document.body);
+    const postText = postRange.toString();
+    after = postText.slice(0, charCount);
+  } catch (e) {
+    console.warn('Error getting context', e);
+  }
+
+  return { before, after };
+}

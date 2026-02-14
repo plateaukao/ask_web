@@ -22,6 +22,11 @@ const cancelTemplateBtn = document.getElementById('cancelTemplate');
 const closeModalBtn = document.getElementById('closeModal');
 const statusEl = document.getElementById('status');
 
+// Selection Settings Elements
+const enableSelectionIconInput = document.getElementById('enableSelectionIcon');
+const selectionModelSelect = document.getElementById('selectionModel');
+const selectionPromptInput = document.getElementById('selectionPrompt');
+
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
@@ -84,6 +89,12 @@ async function loadSettings() {
   const theme = await getTheme();
   document.querySelector(`input[name="theme"][value="${theme}"]`).checked = true;
   await initTheme(); // Apply immediately
+
+  // Load selection settings
+  const selectionConfig = await getSelectionConfig();
+  enableSelectionIconInput.checked = selectionConfig.enabled;
+  selectionModelSelect.value = selectionConfig.model;
+  selectionPromptInput.value = selectionConfig.prompt;
 }
 
 function setupEventListeners() {
@@ -159,6 +170,22 @@ function setupEventListeners() {
 
   // Shortcut Recording
   setupShortcutInput(templateShortcutInput);
+
+  // Save Selection Settings
+  enableSelectionIconInput.addEventListener('change', async () => {
+    await setSelectionConfig({ enabled: enableSelectionIconInput.checked });
+    showStatus('Selection setting saved', 'success');
+  });
+
+  selectionModelSelect.addEventListener('change', async () => {
+    await setSelectionConfig({ model: selectionModelSelect.value });
+    showStatus('Selection model saved', 'success');
+  });
+
+  selectionPromptInput.addEventListener('change', async () => {
+    await setSelectionConfig({ prompt: selectionPromptInput.value });
+    showStatus('Selection prompt saved', 'success');
+  });
 
   // Save template
   saveTemplateBtn.addEventListener('click', saveTemplate);
