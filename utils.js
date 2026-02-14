@@ -5,7 +5,8 @@ var StorageKeys = StorageKeys || {
   API_BASE_URL: 'openai_api_base_url',
   TEMPLATES: 'prompt_templates',
   DEFAULT_TEMPLATE: 'default_template',
-  THEME: 'theme'
+  THEME: 'theme',
+  FLOATING_SHORTCUT: 'floating_shortcut'
 };
 
 const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
@@ -127,6 +128,15 @@ async function getDefaultTemplateId() {
 
 async function setDefaultTemplateId(id) {
   await setStorage({ [StorageKeys.DEFAULT_TEMPLATE]: id });
+}
+
+async function getFloatingShortcut() {
+  const result = await getStorage([StorageKeys.FLOATING_SHORTCUT]);
+  return result[StorageKeys.FLOATING_SHORTCUT] || '';
+}
+
+async function setFloatingShortcut(shortcut) {
+  await setStorage({ [StorageKeys.FLOATING_SHORTCUT]: shortcut });
 }
 
 // Text processing

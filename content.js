@@ -475,11 +475,6 @@ async function createFloatingWindow() {
     
     <div class="header" id="dragHandle">
       <div class="title">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
         Ask Web
       </div>
       <div class="controls">
@@ -663,10 +658,14 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
 async function registerShortcuts() {
   // Listen for storage changes to update shortcuts in real-time if settings change
   let templates = await getTemplates();
+  let floatingShortcut = await getFloatingShortcut();
 
   chrome.storage.onChanged.addListener((changes) => {
     if (changes[StorageKeys.TEMPLATES]) {
       templates = changes[StorageKeys.TEMPLATES].newValue;
+    }
+    if (changes[StorageKeys.FLOATING_SHORTCUT]) {
+      floatingShortcut = changes[StorageKeys.FLOATING_SHORTCUT].newValue;
     }
   });
 
@@ -678,6 +677,28 @@ async function registerShortcuts() {
     }
 
     // Ignore if typing in an input
+
+    // Check Global Floating Window Shortcut
+    if (floatingShortcut) {
+      const parts = floatingShortcut.split('+');
+      const keyStr = parts.pop().toUpperCase();
+      const ctrl = parts.includes('Ctrl');
+      const alt = parts.includes('Alt');
+      const shift = parts.includes('Shift');
+      const meta = parts.includes('Meta');
+
+      if (e.key.toUpperCase() === keyStr &&
+        e.ctrlKey === ctrl &&
+        e.altKey === alt &&
+        e.shiftKey === shift &&
+        e.metaKey === meta) {
+
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFloatingWindow();
+        return;
+      }
+    }
 
     for (const t of templates) {
       if (!t.shortcut) continue;

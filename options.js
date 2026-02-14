@@ -5,6 +5,7 @@ let editingTemplateId = null;
 
 // DOM Elements
 const apiKeyInput = document.getElementById('apiKey');
+const floatingShortcutInput = document.getElementById('floatingShortcut');
 const toggleKeyBtn = document.getElementById('toggleKey');
 const apiBaseUrlInput = document.getElementById('apiBaseUrl');
 const modelSelect = document.getElementById('model');
@@ -27,10 +28,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
 });
 
+function setupShortcutInput(inputElement, onSave) {
+  inputElement.addEventListener('keydown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Ignore alone modifier keys
+    if (['Alt', 'Control', 'Shift', 'Meta'].includes(e.key)) return;
+
+    const parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.metaKey) parts.push('Meta');
+
+    // Key names like "s" should be uppercase
+    let key = e.key;
+    if (key === ' ') key = 'Space';
+    if (key.length === 1) key = key.toUpperCase();
+
+    parts.push(key);
+    const shortcut = parts.join('+');
+    inputElement.value = shortcut;
+
+    if (onSave) onSave(shortcut);
+  });
+
+  inputElement.addEventListener('click', () => {
+    inputElement.value = '';
+    inputElement.placeholder = 'Press keys...';
+  });
+}
+
 async function loadSettings() {
   // Load API key
   const apiKey = await getApiKey();
   apiKeyInput.value = apiKey;
+
+  // Load floating shortcut
+  const floatingShortcut = await getFloatingShortcut();
+  floatingShortcutInput.value = floatingShortcut;
 
   const apiBaseUrl = await getApiBaseUrl();
   apiBaseUrlInput.value = apiBaseUrl;
@@ -108,33 +145,20 @@ function setupEventListeners() {
     if (e.target === templateModal) closeModal();
   });
 
+  // Floating Shortcut Recording
+  setupShortcutInput(floatingShortcutInput, async (shortcut) => {
+    await setFloatingShortcut(shortcut);
+    showStatus('Shortcut saved', 'success');
+  });
+
+  // Floating Shortcut Recording
+  setupShortcutInput(floatingShortcutInput, async (shortcut) => {
+    await setFloatingShortcut(shortcut);
+    showStatus('Shortcut saved', 'success');
+  });
+
   // Shortcut Recording
-  templateShortcutInput.addEventListener('keydown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Ignore alone modifier keys
-    if (['Alt', 'Control', 'Shift', 'Meta'].includes(e.key)) return;
-
-    const parts = [];
-    if (e.ctrlKey) parts.push('Ctrl');
-    if (e.altKey) parts.push('Alt');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.metaKey) parts.push('Meta');
-
-    // Key names like "s" should be uppercase
-    let key = e.key;
-    if (key === ' ') key = 'Space';
-    if (key.length === 1) key = key.toUpperCase();
-
-    parts.push(key);
-    templateShortcutInput.value = parts.join('+');
-  });
-
-  templateShortcutInput.addEventListener('click', () => {
-    templateShortcutInput.value = '';
-    templateShortcutInput.placeholder = 'Press keys...';
-  });
+  setupShortcutInput(templateShortcutInput);
 
   // Save template
   saveTemplateBtn.addEventListener('click', saveTemplate);
