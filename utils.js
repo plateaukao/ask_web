@@ -9,7 +9,8 @@ var StorageKeys = StorageKeys || {
   FLOATING_SHORTCUT: 'floating_shortcut',
   ENABLE_SELECTION_ICON: 'enable_selection_icon',
   SELECTION_MODEL: 'selection_model',
-  SELECTION_PROMPT: 'selection_prompt'
+  SELECTION_PROMPT: 'selection_prompt',
+  SELECTION_ICON_TRIGGER_MODE: 'selection_icon_trigger_mode'
 };
 
 const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
@@ -147,13 +148,15 @@ async function getSelectionConfig() {
   const keys = [
     StorageKeys.ENABLE_SELECTION_ICON,
     StorageKeys.SELECTION_MODEL,
-    StorageKeys.SELECTION_PROMPT
+    StorageKeys.SELECTION_PROMPT,
+    StorageKeys.SELECTION_ICON_TRIGGER_MODE
   ];
   const result = await getStorage(keys);
   return {
     enabled: result[StorageKeys.ENABLE_SELECTION_ICON] !== false, // Default true? Or false. Let's default to false as it might be annoying. User said "toggle to enable", implies off by default? Or "toggle to enable" just means a toggle exists. Let's default to true for discoverability, or false for safety. I'll default to TRUE so the user sees the feature they asked for immediately.
     model: result[StorageKeys.SELECTION_MODEL] || '',
-    prompt: result[StorageKeys.SELECTION_PROMPT] || 'Translate and explain the following text:\n\n{{selection}}'
+    prompt: result[StorageKeys.SELECTION_PROMPT] || 'Translate and explain the following text:\n\n{{selection}}',
+    triggerMode: result[StorageKeys.SELECTION_ICON_TRIGGER_MODE] || 'click'
   };
 }
 
@@ -162,6 +165,7 @@ async function setSelectionConfig(config) {
   if (config.enabled !== undefined) data[StorageKeys.ENABLE_SELECTION_ICON] = config.enabled;
   if (config.model !== undefined) data[StorageKeys.SELECTION_MODEL] = config.model;
   if (config.prompt !== undefined) data[StorageKeys.SELECTION_PROMPT] = config.prompt;
+  if (config.triggerMode !== undefined) data[StorageKeys.SELECTION_ICON_TRIGGER_MODE] = config.triggerMode;
   await setStorage(data);
 }
 

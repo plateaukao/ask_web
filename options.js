@@ -95,6 +95,10 @@ async function loadSettings() {
   enableSelectionIconInput.checked = selectionConfig.enabled;
   selectionModelSelect.value = selectionConfig.model;
   selectionPromptInput.value = selectionConfig.prompt;
+
+  // Load trigger mode
+  const triggerMode = selectionConfig.triggerMode || 'click';
+  document.querySelector(`input[name="selectionTriggerMode"][value="${triggerMode}"]`).checked = true;
 }
 
 function setupEventListeners() {
@@ -185,6 +189,14 @@ function setupEventListeners() {
   selectionPromptInput.addEventListener('change', async () => {
     await setSelectionConfig({ prompt: selectionPromptInput.value });
     showStatus('Selection prompt saved', 'success');
+  });
+
+  // Save trigger mode
+  document.querySelectorAll('input[name="selectionTriggerMode"]').forEach(radio => {
+    radio.addEventListener('change', async (e) => {
+      await setSelectionConfig({ triggerMode: e.target.value });
+      showStatus('Trigger mode saved', 'success');
+    });
   });
 
   // Save template

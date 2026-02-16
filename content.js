@@ -1307,6 +1307,15 @@ async function registerSelectionListener() {
     if (changes[StorageKeys.ENABLE_SELECTION_ICON]) {
       config.enabled = changes[StorageKeys.ENABLE_SELECTION_ICON].newValue;
     }
+    if (changes[StorageKeys.SELECTION_ICON_TRIGGER_MODE]) {
+      config.triggerMode = changes[StorageKeys.SELECTION_ICON_TRIGGER_MODE].newValue;
+      // Recreate icon with new trigger mode
+      if (selectionIcon) {
+        selectionIcon.remove();
+        selectionIcon = null;
+        selectionIconShadow = null;
+      }
+    }
   });
 }
 
@@ -1338,9 +1347,9 @@ async function handleSelection(e) {
   showSelectionIcon(currentSelection.range);
 }
 
-function showSelectionIcon(range) {
+async function showSelectionIcon(range) {
   if (!selectionIcon) {
-    createSelectionIcon();
+    await createSelectionIcon();
   }
 
   const rects = range.getClientRects();
@@ -1368,7 +1377,10 @@ function hideSelectionIcon() {
   }
 }
 
-function createSelectionIcon() {
+async function createSelectionIcon() {
+  const config = await getSelectionConfig();
+  const triggerMode = config.triggerMode || 'click';
+
   selectionIcon = document.createElement('div');
   selectionIcon.id = 'ask-web-selection-icon';
   selectionIcon.style.position = 'fixed';
@@ -1410,11 +1422,21 @@ function createSelectionIcon() {
     </svg>
   `;
 
-  icon.addEventListener('mousedown', (e) => {
-    e.preventDefault(); // Prevent losing selection
-    e.stopPropagation();
-    handleSelectionIconClick();
-  });
+  // Attach event listener based on trigger mode
+  if (triggerMode === 'hover') {
+    icon.addEventListener('mouseenter', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSelectionIconClick();
+    });
+  } else {
+    // Default to click mode
+    icon.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent losing selection
+      e.stopPropagation();
+      handleSelectionIconClick();
+    });
+  }
 
   selectionIconShadow.appendChild(style);
   selectionIconShadow.appendChild(icon);
