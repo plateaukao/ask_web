@@ -801,19 +801,24 @@ async function toggleFloatingWindow() {
     try {
       await createFloatingWindow();
       isVisible = true;
-    } catch (err) {
-      console.error('[Ask Web] Error creating floating window:', err);
+    } catch (e) {
+      console.error('[Ask Web] Failed to create floating window:', e);
     }
   } else {
-    if (!document.body.contains(floatingWindow)) {
-      document.body.appendChild(floatingWindow);
+    // Toggle visibility
+    isVisible = !isVisible;
+    floatingWindow.style.display = isVisible ? 'block' : 'none';
+
+    // Hide selection icon when closing the window
+    if (!isVisible) {
+      hideSelectionIcon();
+      // Clear text selection
+      window.getSelection().removeAllRanges();
     }
 
     if (isVisible) {
-      hideFloatingWindow();
-    } else {
-      isVisible = true;
-      floatingWindow.style.display = 'block';
+      // Reload latest content when showing
+      await loadLatestContent(shadowRoot);
     }
   }
 }
@@ -823,6 +828,8 @@ function hideFloatingWindow() {
   saveWindowState();
   isVisible = false;
   floatingWindow.style.display = 'none';
+  hideSelectionIcon(); // Also hide selection icon
+  window.getSelection().removeAllRanges(); // Clear text selection
 }
 
 // Persistence Helper
@@ -1237,8 +1244,13 @@ async function registerSelectionListener() {
   document.addEventListener('keyup', handleSelection); // For keyboard selection
   document.addEventListener('mousedown', (e) => {
     // Hide icon on click elsewhere if not clicking the icon itself
-    if (selectionIcon && !selectionIcon.contains(e.target)) {
-      hideSelectionIcon();
+    // Check both the host element and its shadow root contents
+    if (selectionIcon && e.target !== selectionIcon && !selectionIcon.contains(e.target)) {
+      // Also check if we're clicking inside the shadow DOM
+      const path = e.composedPath();
+      if (!path.includes(selectionIcon)) {
+        hideSelectionIcon();
+      }
     }
   });
 
@@ -1364,6 +1376,7 @@ function createSelectionIcon() {
 }
 
 async function handleSelectionIconClick() {
+  hideSelectionIcon(); // Hide immediately for better UX
   const config = await getSelectionConfig();
   const selectionText = currentSelection.text;
 
@@ -1394,8 +1407,6 @@ async function handleSelectionIconClick() {
   // Append context to the prompt transparently or prefix it?
   // "Using the following context: ... \n\n [User Prompt]"
   const finalPrompt = `Context: ${context.before} [TARGET]${selectionText}[/TARGET] ${context.after}\n\n${prompt}`;
-
-  hideSelectionIcon();
 
   // Open Floating Window
   if (!isVisible) {
