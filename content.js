@@ -47,8 +47,8 @@ async function createFloatingWindow(options = {}) {
   const state = await getStorageData([stateKey]);
 
   // Default dimensions for selection window vs normal window
-  const defaultWidth = options.fromSelection ? 380 : 380;
-  const defaultHeight = options.fromSelection ? 300 : 600;
+  const defaultWidth = 380;
+  const defaultHeight = options.fromSelection ? 400 : 600;
 
   let x, y, width, height;
 
@@ -79,10 +79,9 @@ async function createFloatingWindow(options = {}) {
       }
     }
 
-    // Use saved dimensions if available, otherwise defaults
-    const savedState = state[stateKey] || {};
-    width = savedState.width || defaultWidth;
-    height = savedState.height || defaultHeight;
+    // For selection mode, always use default dimensions (don't restore saved state)
+    width = defaultWidth;
+    height = defaultHeight;
   } else {
     // Normal window - use saved state or defaults
     const savedState = state[stateKey] || {};
@@ -686,6 +685,9 @@ async function loadTemplates(root) {
     // Attach click listener directly
     btn.addEventListener('click', () => handleTemplateClick(root, t.prompt, t.model));
 
+    if (isSelectionWindow) {
+      btn.style.display = 'none';
+    }
     container.appendChild(btn);
   });
 
@@ -699,6 +701,10 @@ async function loadTemplates(root) {
   chatBtn.addEventListener('click', () => handleChatClick(root));
 
   container.appendChild(chatBtn);
+
+  if (isSelectionWindow) {
+    chatBtn.style.display = 'none';
+  }
 }
 
 // Logic for Template Clicks
@@ -850,20 +856,118 @@ async function toggleFloatingWindow(fromSelection = false, selectionRange = null
       console.error('[Ask Web] Failed to create floating window:', e);
     }
   } else {
-    // Toggle visibility
-    isVisible = !isVisible;
-    floatingWindow.style.display = isVisible ? 'block' : 'none';
+    // If triggered from selection, reposition and resize the window
+    if (fromSelection && selectionRange) {
+      const defaultWidth = 380;
+      const defaultHeight = 400;
 
-    // Hide selection icon when closing the window
-    if (!isVisible) {
-      hideSelectionIcon();
-      // Clear text selection
-      window.getSelection().removeAllRanges();
-    }
+      // Load saved selection window state if available
+      const storage = await getStorageData(['selectionWindowState']);
+      const savedState = storage.selectionWindowState;
 
-    if (isVisible) {
-      // Reload latest content when showing
-      await loadLatestContent(shadowRoot);
+      let width = defaultWidth;
+      let height = defaultHeight;
+
+      if (savedState) {
+        width = savedState.width;
+        height = savedState.height;
+      }
+
+      // Calculate position near selection
+      const rects = selectionRange.getClientRects();
+      if (rects.length > 0) {
+        const lastRect = rects[rects.length - 1];
+
+        // Try to position to the right of selection
+        let x = lastRect.right + 20;
+        let y = lastRect.top;
+
+        // If not enough space on right, try left
+        if (x + width > window.innerWidth - 20) {
+          x = Math.max(20, lastRect.left - width - 20);
+        }
+
+        // If still not enough space, position below
+        if (x < 20 || x + width > window.innerWidth - 20) {
+          x = Math.min(lastRect.left, window.innerWidth - width - 20);
+          y = lastRect.bottom + 20;
+        }
+
+        // Ensure y is within bounds
+        if (y + height > window.innerHeight - 20) {
+          y = Math.max(20, window.innerHeight - height - 20);
+        }
+
+        // Apply new position and size
+        applyWindowState({ x, y, width, height });
+      }
+
+      // Update window type flag
+      isSelectionWindow = true;
+
+      // Show the window if it was hidden
+      if (!isVisible) {
+        isVisible = true;
+        floatingWindow.style.display = 'block';
+        // Reload latest content when showing
+        await loadLatestContent(shadowRoot);
+      }
+
+      // Update template buttons visibility
+      const templateBtns = shadowRoot.querySelectorAll('button[data-action="template"]');
+      templateBtns.forEach(btn => {
+        btn.style.display = 'none';
+      });
+      // Hide Chat button
+      const chatBtn = shadowRoot.getElementById('chatBtn');
+      if (chatBtn) chatBtn.style.display = 'none';
+
+    } else {
+      // Normal toggle (for Esc key, keyboard shortcuts, etc.)
+      isVisible = !isVisible;
+      floatingWindow.style.display = isVisible ? 'block' : 'none';
+
+      if (isVisible) {
+        // Switch to normal mode
+        isSelectionWindow = false;
+
+        // Restore normal window state
+        const storage = await getStorageData(['windowState']);
+        const savedState = storage.windowState || {};
+        const defaultWidth = 380;
+        const defaultHeight = 600;
+
+        const defaultX = Math.max(0, window.innerWidth - defaultWidth - 20);
+        const defaultY = 20;
+
+        const x = savedState.x !== undefined ? savedState.x : defaultX;
+        const y = savedState.y !== undefined ? savedState.y : defaultY;
+        const width = savedState.width || defaultWidth;
+        const height = savedState.height || defaultHeight;
+
+        applyWindowState({ x, y, width, height });
+
+        // Update template buttons visibility
+        const templateBtns = shadowRoot.querySelectorAll('button[data-action="template"]');
+        templateBtns.forEach(btn => {
+          btn.style.display = ''; // Reset to default
+        });
+        // Show Chat button
+        const chatBtn = shadowRoot.getElementById('chatBtn');
+        if (chatBtn) chatBtn.style.display = '';
+      }
+
+      // Hide selection icon when closing the window
+      if (!isVisible) {
+        hideSelectionIcon();
+        // Clear text selection
+        window.getSelection().removeAllRanges();
+        // Reset selection window flag when hiding
+        isSelectionWindow = false;
+      } else {
+        // Reload latest content when showing
+        await loadLatestContent(shadowRoot);
+      }
     }
   }
 }
@@ -883,15 +987,20 @@ function saveWindowState() {
   const rect = floatingWindow.getBoundingClientRect();
   if (floatingWindow.style.display === 'none') return;
   if (rect.width === 0 || rect.height === 0) return;
+
   const state = {
     x: rect.left,
     y: rect.top,
     width: rect.width,
     height: rect.height
   };
-  // Save to different key based on window type
-  const stateKey = isSelectionWindow ? 'selectionWindowState' : 'windowState';
-  chrome.storage.local.set({ [stateKey]: state });
+
+  if (isSelectionWindow) {
+    chrome.storage.local.set({ selectionWindowState: state });
+  } else {
+    // Save to normal window state only
+    chrome.storage.local.set({ windowState: state });
+  }
 }
 
 // Drag Logic - hostEl is floatingWindow, containerEl is the .window-container in Shadow DOM
