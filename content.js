@@ -2,6 +2,7 @@
 var floatingWindow = floatingWindow || null;
 var shadowRoot = shadowRoot || null;
 var isVisible = typeof isVisible !== 'undefined' ? isVisible : false;
+var isSelectionWindow = typeof isSelectionWindow !== 'undefined' ? isSelectionWindow : false;
 
 // Initialize
 function init() {
@@ -38,25 +39,65 @@ async function getStorageData(keys) {
 }
 
 // Create Floating Window
-async function createFloatingWindow() {
+async function createFloatingWindow(options = {}) {
   if (floatingWindow) return;
 
-  // Load state
-  const state = await getStorageData(['windowState']);
+  // Load state - use different storage key for selection vs normal window
+  const stateKey = options.fromSelection ? 'selectionWindowState' : 'windowState';
+  const state = await getStorageData([stateKey]);
 
-  // Default to Top-Right
-  const defaultWidth = 380;
-  const defaultHeight = 600;
-  const defaultX = Math.max(0, window.innerWidth - defaultWidth - 20);
-  const defaultY = 20;
+  // Default dimensions for selection window vs normal window
+  const defaultWidth = options.fromSelection ? 380 : 380;
+  const defaultHeight = options.fromSelection ? 300 : 600;
 
-  let { x, y, width, height } = state.windowState || {};
+  let x, y, width, height;
 
-  // Validate loaded state (force defaults if missing or at 0,0 which is suspicious for first run)
-  if (!width || width < 200) width = defaultWidth;
-  if (!height || height < 200) height = defaultHeight;
-  if (x === undefined || (x === 0 && y === 0)) x = defaultX;
-  if (y === undefined || (x === defaultX && y === 0)) y = defaultY;
+  if (options.fromSelection && options.selectionRange) {
+    // Calculate position near selection
+    const rects = options.selectionRange.getClientRects();
+    if (rects.length > 0) {
+      const lastRect = rects[rects.length - 1];
+
+      // Try to position to the right of selection
+      x = lastRect.right + 20;
+      y = lastRect.top;
+
+      // If not enough space on right, try left
+      if (x + defaultWidth > window.innerWidth - 20) {
+        x = Math.max(20, lastRect.left - defaultWidth - 20);
+      }
+
+      // If still not enough space, position below
+      if (x < 20 || x + defaultWidth > window.innerWidth - 20) {
+        x = Math.min(lastRect.left, window.innerWidth - defaultWidth - 20);
+        y = lastRect.bottom + 20;
+      }
+
+      // Ensure y is within bounds
+      if (y + defaultHeight > window.innerHeight - 20) {
+        y = Math.max(20, window.innerHeight - defaultHeight - 20);
+      }
+    }
+
+    // Use saved dimensions if available, otherwise defaults
+    const savedState = state[stateKey] || {};
+    width = savedState.width || defaultWidth;
+    height = savedState.height || defaultHeight;
+  } else {
+    // Normal window - use saved state or defaults
+    const savedState = state[stateKey] || {};
+    const defaultX = Math.max(0, window.innerWidth - defaultWidth - 20);
+    const defaultY = 20;
+
+    x = savedState.x !== undefined ? savedState.x : defaultX;
+    y = savedState.y !== undefined ? savedState.y : defaultY;
+    width = savedState.width || defaultWidth;
+    height = savedState.height || defaultHeight;
+  }
+
+  // Validate dimensions
+  if (width < 200) width = defaultWidth;
+  if (height < 200) height = defaultHeight;
 
   // Ensure within viewport bounds (keep fully on screen)
   const safeX = Math.max(10, Math.min(x, window.innerWidth - width - 10));
@@ -573,6 +614,9 @@ async function createFloatingWindow() {
 
     document.body.appendChild(floatingWindow);
 
+    // Track window type for state persistence
+    isSelectionWindow = options.fromSelection || false;
+
     // Initialize Theme
     const storage = await getStorageData(['theme']);
     applyTheme(storage.theme || 'dark');
@@ -796,10 +840,11 @@ async function handleChatClick(root) {
   });
 }
 
-async function toggleFloatingWindow() {
+async function toggleFloatingWindow(fromSelection = false, selectionRange = null) {
   if (!floatingWindow) {
     try {
-      await createFloatingWindow();
+      const options = { fromSelection, selectionRange };
+      await createFloatingWindow(options);
       isVisible = true;
     } catch (e) {
       console.error('[Ask Web] Failed to create floating window:', e);
@@ -844,7 +889,9 @@ function saveWindowState() {
     width: rect.width,
     height: rect.height
   };
-  chrome.storage.local.set({ windowState: state });
+  // Save to different key based on window type
+  const stateKey = isSelectionWindow ? 'selectionWindowState' : 'windowState';
+  chrome.storage.local.set({ [stateKey]: state });
 }
 
 // Drag Logic - hostEl is floatingWindow, containerEl is the .window-container in Shadow DOM
@@ -1408,9 +1455,9 @@ async function handleSelectionIconClick() {
   // "Using the following context: ... \n\n [User Prompt]"
   const finalPrompt = `Context: ${context.before} [TARGET]${selectionText}[/TARGET] ${context.after}\n\n${prompt}`;
 
-  // Open Floating Window
+  // Open Floating Window with half height for selection actions
   if (!isVisible) {
-    await toggleFloatingWindow();
+    await toggleFloatingWindow(true, currentSelection.range); // Pass selection range for positioning
   }
 
   // Wait for window to be ready
