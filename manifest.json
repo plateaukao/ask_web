@@ -31,6 +31,9 @@
         "<all_urls>"
       ],
       "js": [
+        "vendor/d3.min.js",
+        "vendor/markmap-view.js",
+        "vendor/markmap-lib.js",
         "marked.min.js",
         "utils.js",
         "content.js"

@@ -363,6 +363,8 @@ async function createFloatingWindow(options = {}) {
       line-height: 1.6;
       color: var(--text-primary);
       border: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
     }
     
     .result-content ul,
@@ -548,6 +550,42 @@ async function createFloatingWindow(options = {}) {
       color: #48bb78;
     }
 
+    /* Mindmap */
+    .mindmap-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .mindmap-container.hidden {
+      display: none;
+    }
+
+    .mindmap-toolbar {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      z-index: 10;
+      display: flex;
+      gap: 4px;
+    }
+
+    .mindmap-svg-wrapper {
+      flex: 1;
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      background: var(--bg-secondary);
+      min-height: 200px;
+    }
+
+    .mindmap-svg-wrapper svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
   `;
     shadowRoot.appendChild(style);
 
@@ -596,6 +634,17 @@ async function createFloatingWindow(options = {}) {
         <div id="resultContent" class="result-content"></div>
         <div id="copyActions" class="copy-actions hidden">
            <!-- Buttons will be injected here -->
+        </div>
+        <div id="mindmapContainer" class="mindmap-container hidden">
+          <div class="mindmap-svg-wrapper">
+            <svg id="mindmapSvg"></svg>
+          </div>
+          <div class="mindmap-toolbar">
+            <button id="mindmapBackBtn" class="copy-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              Back
+            </button>
+          </div>
         </div>
       </div>
       
@@ -726,6 +775,8 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
   // Reset state
   resultContent.innerHTML = '';
   root.getElementById('copyActions').classList.add('hidden');
+  root.getElementById('mindmapContainer').classList.add('hidden');
+  resultContent.classList.remove('hidden');
   currentStreamContent = '';
 
   resultArea.classList.add('hidden');
@@ -1125,6 +1176,9 @@ function setupEventListeners(root) {
 
   const historyBtn = root.getElementById('historyBtn');
   historyBtn.addEventListener('click', () => toggleHistory(root));
+
+  const mindmapBackBtn = root.getElementById('mindmapBackBtn');
+  mindmapBackBtn.addEventListener('click', () => hideMindmap(root));
 }
 
 async function handleStreamEnd(root) {
@@ -1367,6 +1421,55 @@ function renderCopyButtons(root) {
 
   copyActions.appendChild(mdBtn);
   copyActions.appendChild(richTextBtn);
+
+  // Mindmap Button — only shown when markmap is available and content looks like markdown
+  if (typeof markmap !== 'undefined' && markmap.Transformer && markmap.Markmap && looksLikeMarkdown(currentStreamContent)) {
+    const mindmapIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2"></circle><circle cx="5" cy="19" r="2"></circle><circle cx="19" cy="19" r="2"></circle><line x1="12" y1="7" x2="12" y2="13"></line><line x1="12" y1="13" x2="5" y2="17"></line><line x1="12" y1="13" x2="19" y2="17"></line></svg>`;
+    const mindmapBtn = document.createElement('button');
+    mindmapBtn.className = 'copy-btn';
+    mindmapBtn.title = 'Show Mind Map';
+    mindmapBtn.innerHTML = mindmapIcon;
+    mindmapBtn.addEventListener('click', () => showMindmap(root));
+    copyActions.appendChild(mindmapBtn);
+  }
+}
+
+function looksLikeMarkdown(text) {
+  if (!text) return false;
+  return /^#{1,6}\s/m.test(text) || /^[-*+]\s/m.test(text) || /^\d+\.\s/m.test(text);
+}
+
+function showMindmap(root) {
+  const resultContent = root.getElementById('resultContent');
+  const copyActions = root.getElementById('copyActions');
+  const mindmapContainer = root.getElementById('mindmapContainer');
+  const mindmapSvg = root.getElementById('mindmapSvg');
+
+  resultContent.classList.add('hidden');
+  copyActions.classList.add('hidden');
+  mindmapContainer.classList.remove('hidden');
+
+  // Clear previous render
+  mindmapSvg.innerHTML = '';
+
+  try {
+    const transformer = new markmap.Transformer();
+    const { root: mmRoot } = transformer.transform(currentStreamContent);
+    markmap.Markmap.create(mindmapSvg, { autoFit: true }, mmRoot);
+  } catch (err) {
+    console.error('Mindmap render error:', err);
+    mindmapSvg.innerHTML = `<text x="10" y="20" fill="red">Failed to render mindmap: ${err.message}</text>`;
+  }
+}
+
+function hideMindmap(root) {
+  const resultContent = root.getElementById('resultContent');
+  const copyActions = root.getElementById('copyActions');
+  const mindmapContainer = root.getElementById('mindmapContainer');
+
+  mindmapContainer.classList.add('hidden');
+  resultContent.classList.remove('hidden');
+  copyActions.classList.remove('hidden');
 }
 
 // Content Extraction Strategy
