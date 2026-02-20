@@ -365,6 +365,16 @@ async function createFloatingWindow(options = {}) {
       border: 1px solid var(--border-color);
     }
     
+    .result-content ul,
+    .result-content ol {
+      margin: 2px 0;
+      padding-left: 0.5em;
+    }
+
+    .result-content li {
+      margin-bottom: 2px;
+    }
+
     .result-content code {
       background: var(--bg-tertiary);
       padding: 2px 6px;
