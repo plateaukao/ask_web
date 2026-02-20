@@ -77,6 +77,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'openMindmapTab') {
+    chrome.storage.session.set({ mindmapContent: request.content }).then(() => {
+      chrome.tabs.create({ url: 'mindmap.html' });
+    });
+    return true;
+  }
+
   if (request.action === 'openChat') {
     // Store page data for chat page to retrieve
     chrome.storage.session.set({ currentPageData: request.pageData });

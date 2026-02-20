@@ -34,6 +34,7 @@
         "vendor/d3.min.js",
         "vendor/markmap-view.js",
         "vendor/markmap-lib.js",
+        "vendor/markmap-toolbar.js",
         "marked.min.js",
         "utils.js",
         "content.js"

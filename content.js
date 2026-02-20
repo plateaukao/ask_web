@@ -586,6 +586,46 @@ async function createFloatingWindow(options = {}) {
       display: block;
     }
 
+    /* markmap-toolbar styles (adapted for shadow DOM) */
+    .mm-toolbar {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      z-index: 10;
+      display: flex;
+      user-select: none;
+      align-items: center;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-primary);
+      padding: 4px;
+      line-height: 1;
+    }
+    .mm-toolbar:hover { border-color: var(--accent-primary); }
+    .mm-toolbar svg { display: block; }
+    .mm-toolbar a { display: inline-block; text-decoration: none; }
+    .mm-toolbar-brand > img { width: 1rem; height: 1rem; vertical-align: middle; }
+    .mm-toolbar-brand > span { padding: 0 4px; }
+    .mm-toolbar-brand:not(:first-child),
+    .mm-toolbar-item:not(:first-child) { margin-left: 4px; }
+    .mm-toolbar-brand > *, .mm-toolbar-item > * {
+      min-width: 1rem;
+      cursor: pointer;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1rem;
+      color: var(--text-secondary);
+    }
+    .mm-toolbar-brand:hover, .mm-toolbar-item:hover,
+    .mm-toolbar-brand.active, .mm-toolbar-item.active {
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+    }
+    .mm-toolbar-brand:hover > *, .mm-toolbar-item:hover > *,
+    .mm-toolbar-brand.active > *, .mm-toolbar-item.active > * {
+      color: var(--text-primary);
+    }
+
   `;
     shadowRoot.appendChild(style);
 
@@ -1449,13 +1489,28 @@ function showMindmap(root) {
   copyActions.classList.add('hidden');
   mindmapContainer.classList.remove('hidden');
 
-  // Clear previous render
+  // Clear previous render and toolbar
   mindmapSvg.innerHTML = '';
+  const oldToolbar = mindmapContainer.querySelector('.mm-toolbar');
+  if (oldToolbar) oldToolbar.remove();
 
   try {
     const transformer = new markmap.Transformer();
     const { root: mmRoot } = transformer.transform(currentStreamContent);
-    markmap.Markmap.create(mindmapSvg, { autoFit: true }, mmRoot);
+    const mm = markmap.Markmap.create(mindmapSvg, { autoFit: true }, mmRoot);
+
+    if (markmap.Toolbar) {
+      const toolbar = markmap.Toolbar.create(mm);
+      toolbar.showBrand = false;
+      toolbar.register({
+        id: 'fullscreen',
+        title: 'Open in new tab',
+        content: markmap.Toolbar.icon('M3 3h6v2h-4v4h-2zM11 3h6v6h-2v-4h-4zM3 11h2v4h4v2h-6zM15 13h2v4h-6v-2h4z', { stroke: 'none', fill: 'currentColor' }),
+        onClick: () => openMindmapTab(),
+      });
+      toolbar.setItems(['zoomIn', 'zoomOut', 'fit', 'recurse', 'fullscreen']);
+      mindmapContainer.appendChild(toolbar.el);
+    }
   } catch (err) {
     console.error('Mindmap render error:', err);
     mindmapSvg.innerHTML = `<text x="10" y="20" fill="red">Failed to render mindmap: ${err.message}</text>`;
@@ -1470,6 +1525,10 @@ function hideMindmap(root) {
   mindmapContainer.classList.add('hidden');
   resultContent.classList.remove('hidden');
   copyActions.classList.remove('hidden');
+}
+
+async function openMindmapTab() {
+  chrome.runtime.sendMessage({ action: 'openMindmapTab', content: currentStreamContent });
 }
 
 // Content Extraction Strategy
