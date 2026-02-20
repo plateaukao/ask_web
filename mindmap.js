@@ -24,7 +24,7 @@ async function init() {
     const isDark = theme !== 'light';
     const mm = markmap.Markmap.create(svg, {
       autoFit: true,
-      style: (id) => `#${id} { --markmap-text-color: ${isDark ? '#e2e8f0' : '#333'}; --markmap-circle-open-bg: ${isDark ? '#444' : '#fff'}; }`,
+      style: (id) => `#${id} { --markmap-text-color: ${isDark ? '#e2e8f0' : '#333'}; --markmap-circle-open-bg: #fff; }`,
     }, root);
 
     if (markmap.Toolbar) {

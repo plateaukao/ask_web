@@ -1497,7 +1497,11 @@ function showMindmap(root) {
   try {
     const transformer = new markmap.Transformer();
     const { root: mmRoot } = transformer.transform(currentStreamContent);
-    const mm = markmap.Markmap.create(mindmapSvg, { autoFit: true }, mmRoot);
+    const isDark = floatingWindow.getAttribute('data-theme') !== 'light';
+    const mm = markmap.Markmap.create(mindmapSvg, {
+      autoFit: true,
+      style: (id) => `#${id} { --markmap-text-color: ${isDark ? '#e2e8f0' : '#333'}; --markmap-circle-open-bg: #fff; }`,
+    }, mmRoot);
 
     if (markmap.Toolbar) {
       const toolbar = markmap.Toolbar.create(mm);
