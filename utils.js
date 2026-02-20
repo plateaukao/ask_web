@@ -41,12 +41,8 @@ function applyTheme(theme) {
 
 var DefaultModels = DefaultModels || [
   { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro (Latest)' },
-  { id: 'gpt-5.2', name: 'GPT-5.2' },
-  { id: 'gpt-4.1', name: 'GPT-4.1' },
-  { id: 'gpt-4o', name: 'GPT-4o' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-  { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
+  { id: 'gpt-5.1', name: 'GPT-5.1' },
+  { id: 'gpt-4.1', name: 'GPT-4.1' }
 ];
 
 var DefaultTemplates = DefaultTemplates || [
@@ -109,7 +105,7 @@ function normalizeApiBaseUrl(url) {
 
 async function getModel() {
   const result = await getStorage([StorageKeys.MODEL]);
-  return result[StorageKeys.MODEL] || 'gpt-4o-mini';
+  return result[StorageKeys.MODEL] || 'gpt-4.1-mini';
 }
 
 async function setModel(model) {
@@ -170,7 +166,7 @@ async function setSelectionConfig(config) {
 }
 
 // Text processing
-function truncateContent(content, maxTokens = 12000) {
+function truncateContent(content, maxTokens = 50000) {
   // Rough estimation: 1 token ≈ 4 characters
   const maxChars = maxTokens * 4;
   if (content.length <= maxChars) return content;
