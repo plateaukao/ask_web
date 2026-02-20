@@ -565,8 +565,8 @@ async function createFloatingWindow(options = {}) {
 
     .mindmap-toolbar {
       position: absolute;
-      bottom: 8px;
-      right: 8px;
+      top: 8px;
+      left: 8px;
       z-index: 10;
       display: flex;
       gap: 4px;
@@ -590,7 +590,7 @@ async function createFloatingWindow(options = {}) {
     .mm-toolbar {
       position: absolute;
       bottom: 8px;
-      left: 8px;
+      right: 8px;
       z-index: 10;
       display: flex;
       user-select: none;
