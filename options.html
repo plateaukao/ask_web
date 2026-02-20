@@ -68,12 +68,8 @@
           <input type="text" id="model" list="modelList" placeholder="Enter or select a model">
           <datalist id="modelList">
             <option value="gpt-5.2-pro">GPT-5.2 Pro (Latest)</option>
-            <option value="gpt-5.2">GPT-5.2</option>
+            <option value="gpt-5.2">GPT-5.1</option>
             <option value="gpt-4.1">GPT-4.1</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o Mini</option>
-            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
           </datalist>
           <small>Select from the list or type any model name (e.g., gpt-5.2-pro, o1-preview)</small>
         </div>
@@ -127,13 +123,14 @@
 
         <div class="form-group">
           <label for="selectionModel">Model for Selection Action</label>
-          <select id="selectionModel">
-            <option value="">Use Global Default</option>
+          <input type="text" id="selectionModel" list="selectionModelList" placeholder="Leave empty to use global default">
+          <datalist id="selectionModelList">
             <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
             <option value="gpt-5.2">GPT-5.2</option>
             <option value="gpt-4o">GPT-4o</option>
             <option value="gpt-4o-mini">GPT-4o Mini</option>
-          </select>
+          </datalist>
+          <small>Leave empty to use the global default model.</small>
         </div>
 
         <div class="form-group">
@@ -181,14 +178,13 @@
             </div>
             <div class="form-group">
               <label for="templateModel">Model Overlay (Optional)</label>
-              <select id="templateModel">
-                <option value="">Use Global Default</option>
+              <input type="text" id="templateModel" list="templateModelList" placeholder="Leave empty to use global default">
+              <datalist id="templateModelList">
                 <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
-                <option value="gpt-5.2">GPT-5.2</option>
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                <option value="o1-preview">o1-preview</option>
-              </select>
+                <option value="gpt-5.1">GPT-5.1</option>
+                <option value="gpt-4.1">GPT-4.1</option>
+              </datalist>
+              <small>Leave empty to use the global default model.</small>
             </div>
             <div class="form-group">
               <label for="templateShortcut">Keyboard Shortcut (Optional)</label>
