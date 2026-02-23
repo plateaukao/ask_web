@@ -385,7 +385,7 @@ body {
 
 /* Streaming Cursor */
 .cursor-blink {
-  animation: blink 1s infinite;
+  animation: none;
   color: var(--accent-primary);
 }
 
