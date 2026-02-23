@@ -414,12 +414,24 @@ async function createFloatingWindow(options = {}) {
     .hidden { display: none !important; }
     
     .cursor-blink {
-      display: inline-block;
-      width: 8px;
-      height: 14px;
-      background: var(--accent-primary);
+      display: inline-flex;
+      width: 16px;
+      height: 16px;
       vertical-align: middle;
-      margin-left: 2px;
+      margin-left: 4px;
+      animation: none;
+    }
+
+    .cursor-blink svg {
+      width: 16px;
+      height: 16px;
+      stroke: #000;
+      fill: #fff;
+    }
+
+    @keyframes ask-web-cursor-blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
     }
 
     /* Resize Handles */
@@ -466,8 +478,8 @@ async function createFloatingWindow(options = {}) {
     .history-list {
       position: absolute;
       top: 60px; /* Below header */
-      left: 0;
-      right: 0;
+      left: 1px;
+      right: 1px;
       bottom: 0;
       background: var(--bg-primary);
       z-index: 10;
@@ -494,10 +506,13 @@ async function createFloatingWindow(options = {}) {
 
     .history-meta {
       display: flex;
+      align-items: center;
       justify-content: space-between;
+      gap: 8px;
       color: var(--text-muted);
       font-size: 11px;
-      margin-bottom: 4px;
+      margin-top: 4px;
+      white-space: nowrap;
     }
 
     .history-preview {
@@ -505,9 +520,19 @@ async function createFloatingWindow(options = {}) {
       font-size: 13px;
       line-height: 1.4;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 1;
       -webkit-box-orient: vertical;
       overflow: hidden;
+    }
+
+    .history-meta-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-meta-time {
+      margin-left: auto;
+      flex-shrink: 0;
     }
     
     .empty-state {
@@ -814,7 +839,7 @@ async function loadTemplates(root) {
 }
 
 // Logic for Template Clicks
-async function handleTemplateClick(root, promptTemplate, modelOverride) {
+async function handleTemplateClick(root, promptTemplate, modelOverride, historyMetadata = null) {
   const resultArea = root.getElementById('resultArea');
   const resultContent = root.getElementById('resultContent');
   const loading = root.getElementById('loading');
@@ -826,6 +851,7 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
   root.getElementById('mindmapContainer').classList.add('hidden');
   resultContent.classList.remove('hidden');
   currentStreamContent = '';
+  currentHistoryMetadata = historyMetadata;
 
   resultArea.classList.add('hidden');
   loading.classList.remove('hidden');
@@ -847,7 +873,7 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
     // Show result area immediately for streaming
     loading.classList.add('hidden');
     resultArea.classList.remove('hidden');
-    resultContent.innerHTML = '<span class="cursor-blink">▊</span>';
+    resultContent.innerHTML = '<span class="cursor-blink"><svg viewBox="0 0 24 24" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-4 4v-4a2 2 0 0 1-2-2z"></path><path d="M8 8h8"></path><path d="M8 11h6"></path></svg></span>';
 
   } catch (err) {
     loading.classList.add('hidden');
@@ -1249,7 +1275,8 @@ async function handleStreamEnd(root) {
 
   // Save to history
   if (currentStreamContent) {
-    await saveContentHistory(currentStreamContent);
+    await saveContentHistory(currentStreamContent, currentHistoryMetadata);
+    currentHistoryMetadata = null;
     renderCopyButtons(root);
   }
 }
@@ -1259,7 +1286,7 @@ function getHistoryKey() {
   return `history_${window.location.href}`;
 }
 
-async function saveContentHistory(content) {
+async function saveContentHistory(content, metadata = null) {
   const key = getHistoryKey();
   const data = await getStorageData([key]);
   const history = data[key] || [];
@@ -1271,6 +1298,9 @@ async function saveContentHistory(content) {
     content: content,
     summary: content.substring(0, 150) + (content.length > 150 ? '...' : '')
   };
+  if (metadata && metadata.type === 'selection') {
+    entry.selectionMeta = metadata;
+  }
 
   // Add to top
   history.unshift(entry);
@@ -1348,8 +1378,8 @@ async function renderHistoryList(root) {
     const date = new Date(item.timestamp).toLocaleString();
 
     div.innerHTML = `
-            <div class="history-meta">${date}</div>
-            <div class="history-preview">${item.summary.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+            <div class="history-preview">${formatHistoryGeneratedLine(item)}</div>
+            <div class="history-meta">${formatHistoryMetaLine(item, date)}</div>
         `;
 
     div.addEventListener('click', () => {
@@ -1360,22 +1390,60 @@ async function renderHistoryList(root) {
   });
 }
 
+function escapeHtml(text) {
+  return (text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function formatHistoryPreview(item) {
+  if (item.selectionMeta && item.selectionMeta.selectedText) {
+    const selected = escapeHtml(item.selectionMeta.selectedText);
+    const context = escapeHtml(item.selectionMeta.context || '');
+    return `<strong>${selected}</strong>${context ? ` — ${context}` : ''}`;
+  }
+  return escapeHtml(item.summary || '');
+}
+
+function formatHistoryMetaLine(item, date) {
+  if (item.selectionMeta && item.selectionMeta.selectedText) {
+    return `<span class="history-meta-text">${formatHistoryPreview(item)}</span><span class="history-meta-time">${escapeHtml(date)}</span>`;
+  }
+  return `<span class="history-meta-text"></span><span class="history-meta-time">${escapeHtml(date)}</span>`;
+}
+
+function formatHistoryGeneratedLine(item) {
+  return escapeHtml(item.summary || '');
+}
+
+function buildHistoryDisplayContent(item) {
+  if (item.selectionMeta && item.selectionMeta.selectedText) {
+    const selected = item.selectionMeta.selectedText || '';
+    const context = item.selectionMeta.context || '';
+    return `**Selected Text:** ${selected}\n\n**Context:** ${context}\n\n---\n\n${item.content}`;
+  }
+  return item.content;
+}
+
 function restoreHistoryItem(root, item) {
   const resultArea = root.getElementById('resultArea');
   const resultContent = root.getElementById('resultContent');
   const historyList = root.getElementById('historyList');
 
+  const displayContent = buildHistoryDisplayContent(item);
+
   try {
     if (typeof marked !== 'undefined') {
-      resultContent.innerHTML = marked.parse(item.content);
+      resultContent.innerHTML = marked.parse(displayContent);
     } else {
-      resultContent.textContent = item.content;
+      resultContent.textContent = displayContent;
     }
   } catch (e) {
-    resultContent.textContent = item.content;
+    resultContent.textContent = displayContent;
   }
 
-  currentStreamContent = item.content;
+  currentStreamContent = displayContent;
   renderCopyButtons(root);
 
   historyList.classList.add('hidden');
@@ -1384,6 +1452,7 @@ function restoreHistoryItem(root, item) {
 
 // Stream Helpers
 var currentStreamContent = '';
+var currentHistoryMetadata = null;
 
 function appendStreamContent(content, root) {
   currentStreamContent += content;
@@ -1399,7 +1468,7 @@ function handleStreamError(error, root) {
 
 function renderMarkdown(text, root, showCursor) {
   const resultContent = root.getElementById('resultContent');
-  const cursorHtml = showCursor ? '<span class="cursor-blink">▊</span>' : '';
+  const cursorHtml = showCursor ? '<span class="cursor-blink"><svg viewBox="0 0 24 24" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-4 4v-4a2 2 0 0 1-2-2z"></path><path d="M8 8h8"></path><path d="M8 11h6"></path></svg></span>' : '';
 
   if (typeof marked !== 'undefined') {
     // Configure marked if needed
@@ -1698,9 +1767,9 @@ async function createSelectionIcon() {
     .icon {
       width: 32px;
       height: 32px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 50%;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      background: #fff;
+      border: 2px solid #000;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1711,7 +1780,7 @@ async function createSelectionIcon() {
       transform: scale(1.1);
     }
     svg {
-      color: white;
+      color: #000;
       width: 18px;
       height: 18px;
     }
@@ -1720,8 +1789,10 @@ async function createSelectionIcon() {
   const icon = document.createElement('div');
   icon.className = 'icon';
   icon.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    <svg viewBox="0 0 24 24" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-4 4v-4a2 2 0 0 1-2-2z"></path>
+      <path d="M8 8h8"></path>
+      <path d="M8 11h6"></path>
     </svg>
   `;
 
@@ -1754,6 +1825,7 @@ async function handleSelectionIconClick() {
 
   // Get Context
   const context = getSelectionContext(currentSelection.range);
+  const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
 
   // Prepare Prompt
   // Replace {{selection}} and ensure context is added if not explicitly in prompt
@@ -1793,7 +1865,7 @@ async function handleSelectionIconClick() {
       clearInterval(timer);
       if (shadowRoot) {
         // Trigger generic template handler but with our specific prompt
-        handleTemplateClick(shadowRoot, finalPrompt, config.model);
+        handleTemplateClick(shadowRoot, finalPrompt, config.model, historyMetadata);
       }
     }
     waited++;
@@ -1824,4 +1896,29 @@ function getSelectionContext(range, charCount = 300) {
   }
 
   return { before, after };
+}
+
+function buildSelectionHistoryMetadata(selectionText, context) {
+  const normalize = (text) => (text || '').replace(/\s+/g, ' ').trim();
+  const before = normalize(context.before);
+  const after = normalize(context.after);
+  const beforeSentences = (before.match(/[^.!?]+[.!?]?/g) || []).map(s => s.trim()).filter(Boolean);
+  const afterSentences = (after.match(/[^.!?]+[.!?]?/g) || []).map(s => s.trim()).filter(Boolean);
+  const contextParts = [];
+
+  if (beforeSentences.length > 0) {
+    contextParts.push(beforeSentences[beforeSentences.length - 1]);
+  }
+  if (afterSentences.length > 0) {
+    contextParts.push(afterSentences[0]);
+  }
+
+  const fallbackContext = `${before.slice(-120)}${before && after ? ' ' : ''}${after.slice(0, 120)}`.trim();
+  const compactContext = (contextParts.join(' ').trim() || fallbackContext).slice(0, 280);
+
+  return {
+    type: 'selection',
+    selectedText: normalize(selectionText).slice(0, 200),
+    context: compactContext
+  };
 }
