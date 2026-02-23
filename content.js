@@ -222,6 +222,11 @@ async function createFloatingWindow(options = {}) {
       color: var(--text-primary);
     }
 
+    .processing-icon {
+      display: inline-flex;
+      color: var(--text-secondary);
+    }
+
     /* Controls Header (New) */
     .controls-header {
       display: flex;
@@ -413,12 +418,9 @@ async function createFloatingWindow(options = {}) {
       width: 8px;
       height: 14px;
       background: var(--accent-primary);
-      animation: blink 1s infinite;
       vertical-align: middle;
       margin-left: 2px;
     }
-    
-    @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 
     /* Resize Handles */
     .resize-handle {
@@ -642,6 +644,11 @@ async function createFloatingWindow(options = {}) {
     <div class="header" id="dragHandle">
       <div class="title">
         Ask Web
+        <span id="processingIcon" class="processing-icon hidden" aria-label="Processing">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"></circle>
+          </svg>
+        </span>
       </div>
       <div class="controls">
         <button id="settingsBtn" class="btn-icon" title="Settings">
@@ -811,6 +818,7 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
   const resultArea = root.getElementById('resultArea');
   const resultContent = root.getElementById('resultContent');
   const loading = root.getElementById('loading');
+  const processingIcon = root.getElementById('processingIcon');
 
   // Reset state
   resultContent.innerHTML = '';
@@ -821,6 +829,7 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
 
   resultArea.classList.add('hidden');
   loading.classList.remove('hidden');
+  if (processingIcon) processingIcon.classList.remove('hidden');
 
   try {
     const pageData = extractPageContent();
@@ -842,6 +851,7 @@ async function handleTemplateClick(root, promptTemplate, modelOverride) {
 
   } catch (err) {
     loading.classList.add('hidden');
+    if (processingIcon) processingIcon.classList.add('hidden');
     resultContent.textContent = 'Error: ' + err.message;
     resultArea.classList.remove('hidden');
   }
@@ -862,7 +872,7 @@ async function registerShortcuts() {
     }
   });
 
-  window.addEventListener('keydown', (e) => {
+  const handleKeydown = (e) => {
     // Handle Esc to hide
     if (e.key === 'Escape' && isVisible) {
       toggleFloatingWindow();
@@ -917,7 +927,10 @@ async function registerShortcuts() {
         break;
       }
     }
-  });
+  };
+
+  // Capture phase makes Esc reliable even if page handlers stop propagation later.
+  window.addEventListener('keydown', handleKeydown, true);
 }
 
 async function triggerTemplateAction(template) {
@@ -1199,6 +1212,8 @@ function setupEventListeners(root) {
       // Handle error
       const loading = root.getElementById('loading');
       if (loading) loading.classList.add('hidden');
+      const processingIcon = root.getElementById('processingIcon');
+      if (processingIcon) processingIcon.classList.add('hidden');
 
       const resultContent = root.getElementById('resultContent');
       if (resultContent) {
@@ -1224,6 +1239,8 @@ function setupEventListeners(root) {
 async function handleStreamEnd(root) {
   const loading = root.getElementById('loading');
   loading.classList.add('hidden');
+  const processingIcon = root.getElementById('processingIcon');
+  if (processingIcon) processingIcon.classList.add('hidden');
 
   // Clean up cursor
   const resultContent = root.getElementById('resultContent');
