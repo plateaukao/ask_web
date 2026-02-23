@@ -1421,7 +1421,15 @@ function buildHistoryDisplayContent(item) {
   if (item.selectionMeta && item.selectionMeta.selectedText) {
     const selected = item.selectionMeta.selectedText || '';
     const context = item.selectionMeta.context || '';
-    return `**Selected Text:** ${selected}\n\n**Context:** ${context}\n\n---\n\n${item.content}`;
+    let contextWithSelection = context;
+    if (contextWithSelection && contextWithSelection.includes(selected)) {
+      contextWithSelection = contextWithSelection.replace(selected, `**${selected}**`);
+    } else if (contextWithSelection) {
+      contextWithSelection = `${contextWithSelection} **${selected}**`;
+    } else {
+      contextWithSelection = `**${selected}**`;
+    }
+    return `${contextWithSelection}\n\n---\n\n${item.content}`;
   }
   return item.content;
 }
@@ -1837,8 +1845,7 @@ async function handleSelectionIconClick() {
   // Or inject it into the system prompt?
   // The current `handleTemplateClick` sends `prompt` as the user message.
 
-  // Let's format the context nicely.
-  const fullContent = `Context before: "${context.before}"\n\nSelected Text: "${selectionText}"\n\nContext after: "${context.after}"`;
+  const actionContext = buildSelectionContextForAction(selectionText, context);
 
   // If user prompt has {{selection}}, replace it.
   // If user prompt has {{content}}, replace it with full context + selection?
@@ -1846,11 +1853,11 @@ async function handleSelectionIconClick() {
   // And replace {{content}} with selection (for backward compat if they use generic templates).
 
   prompt = prompt.replace(/{{selection}}/g, selectionText);
-  prompt = prompt.replace(/{{content}}/g, selectionText);
+  prompt = prompt.replace(/{{content}}/g, actionContext);
 
   // Append context to the prompt transparently or prefix it?
   // "Using the following context: ... \n\n [User Prompt]"
-  const finalPrompt = `Context: ${context.before} [TARGET]${selectionText}[/TARGET] ${context.after}\n\n${prompt}`;
+  const finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
 
   // Open Floating Window with half height for selection actions
   if (!isVisible) {
@@ -1900,6 +1907,7 @@ function getSelectionContext(range, charCount = 300) {
 
 function buildSelectionHistoryMetadata(selectionText, context) {
   const normalize = (text) => (text || '').replace(/\s+/g, ' ').trim();
+  const selected = normalize(selectionText).slice(0, 200);
   const before = normalize(context.before);
   const after = normalize(context.after);
   const beforeSentences = (before.match(/[^.!?]+[.!?]?/g) || []).map(s => s.trim()).filter(Boolean);
@@ -1909,16 +1917,33 @@ function buildSelectionHistoryMetadata(selectionText, context) {
   if (beforeSentences.length > 0) {
     contextParts.push(beforeSentences[beforeSentences.length - 1]);
   }
+  if (selected) {
+    contextParts.push(selected);
+  }
   if (afterSentences.length > 0) {
     contextParts.push(afterSentences[0]);
   }
 
-  const fallbackContext = `${before.slice(-120)}${before && after ? ' ' : ''}${after.slice(0, 120)}`.trim();
+  const fallbackContext = `${before.slice(-100)}${before && selected ? ' ' : ''}${selected}${(before || selected) && after ? ' ' : ''}${after.slice(0, 100)}`.trim();
   const compactContext = (contextParts.join(' ').trim() || fallbackContext).slice(0, 280);
 
   return {
     type: 'selection',
-    selectedText: normalize(selectionText).slice(0, 200),
+    selectedText: selected,
     context: compactContext
   };
+}
+
+function buildSelectionContextForAction(selectionText, context) {
+  const metadata = buildSelectionHistoryMetadata(selectionText, context);
+  const selected = metadata.selectedText || '';
+  const baseContext = metadata.context || selected;
+
+  if (selected && baseContext.includes(selected)) {
+    return baseContext.replace(selected, `[TARGET]${selected}[/TARGET]`);
+  }
+  if (selected) {
+    return `${baseContext}${baseContext ? ' ' : ''}[TARGET]${selected}[/TARGET]`.trim();
+  }
+  return baseContext;
 }
