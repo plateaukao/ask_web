@@ -1650,7 +1650,38 @@ function extractPageContent() {
     return { title: document.title, url: window.location.href, content: main.innerText };
   }
 
-  // 4. Fallback to body but try to exclude nav, header, footer if possible
+  // 4. Try extracting content from same-origin iframes (e.g. Naver blogs)
+  const iframes = document.querySelectorAll('iframe');
+  for (const iframe of iframes) {
+    try {
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc) continue;
+
+      const iframeArticle = iframeDoc.querySelector('article');
+      if (iframeArticle && iframeArticle.innerText.trim().length > 200) {
+        return { title: document.title, url: window.location.href, content: iframeArticle.innerText };
+      }
+
+      const iframeMain = iframeDoc.querySelector('main');
+      if (iframeMain && iframeMain.innerText.trim().length > 200) {
+        return { title: document.title, url: window.location.href, content: iframeMain.innerText };
+      }
+
+      const iframeBody = iframeDoc.body;
+      if (iframeBody) {
+        const clone = iframeBody.cloneNode(true);
+        clone.querySelectorAll('script, style, nav, header, footer, noscript').forEach(el => el.remove());
+        const text = clone.innerText.trim();
+        if (text.length > 200) {
+          return { title: document.title, url: window.location.href, content: text };
+        }
+      }
+    } catch (e) {
+      // Cross-origin iframe — skip silently
+    }
+  }
+
+  // 5. Fallback to body but try to exclude nav, header, footer if possible
   // Clone body to manipulate
   const bodyClone = document.body.cloneNode(true);
   const scripts = bodyClone.querySelectorAll('script, style, nav, header, footer, noscript');
