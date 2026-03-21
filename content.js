@@ -1737,13 +1737,13 @@ function extractPageContent() {
   // 2. Try simple article detection
   const article = document.querySelector('article');
   if (article) {
-    return { title: document.title, url: window.location.href, content: article.innerText };
+    return { title: document.title, url: window.location.href, content: extractElementText(article) };
   }
 
   // 3. Try main tag
   const main = document.querySelector('main');
   if (main) {
-    return { title: document.title, url: window.location.href, content: main.innerText };
+    return { title: document.title, url: window.location.href, content: extractElementText(main) };
   }
 
   // 4. Try extracting content from same-origin iframes (e.g. Naver blogs)
@@ -1755,19 +1755,19 @@ function extractPageContent() {
 
       const iframeArticle = iframeDoc.querySelector('article');
       if (iframeArticle && iframeArticle.innerText.trim().length > 200) {
-        return { title: document.title, url: window.location.href, content: iframeArticle.innerText };
+        return { title: document.title, url: window.location.href, content: extractElementText(iframeArticle) };
       }
 
       const iframeMain = iframeDoc.querySelector('main');
       if (iframeMain && iframeMain.innerText.trim().length > 200) {
-        return { title: document.title, url: window.location.href, content: iframeMain.innerText };
+        return { title: document.title, url: window.location.href, content: extractElementText(iframeMain) };
       }
 
       const iframeBody = iframeDoc.body;
       if (iframeBody) {
         const clone = iframeBody.cloneNode(true);
         clone.querySelectorAll('script, style, nav, header, footer, noscript').forEach(el => el.remove());
-        const text = clone.innerText.trim();
+        const text = extractElementText(clone).trim();
         if (text.length > 200) {
           return { title: document.title, url: window.location.href, content: text };
         }
@@ -1783,7 +1783,7 @@ function extractPageContent() {
   const scripts = bodyClone.querySelectorAll('script, style, nav, header, footer, noscript');
   scripts.forEach(el => el.remove());
 
-  return { title: document.title, url: window.location.href, content: bodyClone.innerText.trim() };
+  return { title: document.title, url: window.location.href, content: extractElementText(bodyClone) };
 }
 
 init();

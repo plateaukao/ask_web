@@ -165,6 +165,184 @@ async function setSelectionConfig(config) {
   await setStorage(data);
 }
 
+// ─── Semantic content extraction ────────────────────────────────────────────
+
+/**
+ * Resolve the semantic text value of a single element that may be a status
+ * image/icon (checkmark, cross, warning, etc.) instead of real text.
+ * Returns null when the element is not a recognisable status indicator so the
+ * caller falls through to normal text extraction.
+ */
+function resolveStatusImage(el) {
+  // ── Confluence emoticons ────────────────────────────────────────────────
+  // <img class="emoticon emoticon-tick" data-emoticon-name="tick" alt="(tick)">
+  const emoticon = el.dataset && el.dataset.emoticonName;
+  if (emoticon) {
+    const EMOTICON_MAP = {
+      tick: '✓', cross: '✗',
+      'thumbs-up': '👍', 'thumbs-down': '👎',
+      'warning': '⚠', information: 'ℹ',
+      plus: '+', minus: '−',
+      smile: '😊', sad: '😞', laugh: '😄', wink: '😉', cheeky: '😛',
+      'light-on': '💡', 'light-off': '💡(off)',
+      'yellow-star': '★', 'red-star': '★', 'green-star': '★', 'blue-star': '★',
+      heart: '❤', 'broken-heart': '💔',
+      question: '?',
+    };
+    // data-emoticon-name uses both dash and underscore variants across versions
+    const key = emoticon.toLowerCase().replace(/_/g, '-');
+    if (EMOTICON_MAP[key]) return EMOTICON_MAP[key];
+  }
+
+  // ── Confluence Status macro lozenge ────────────────────────────────────
+  // Renders as: <span class="status-macro aui-lozenge aui-lozenge-success">On track</span>
+  // or <span data-macro-name="status" ...>
+  if (el.tagName !== 'IMG') {
+    const cls = (el.getAttribute('class') || '').toLowerCase();
+    const macroName = el.dataset && el.dataset.macroName;
+    if (macroName === 'status' || cls.includes('status-macro') || cls.includes('aui-lozenge')) {
+      const text = (el.textContent || '').trim();
+      if (text) {
+        // Colour hint from class
+        if (cls.includes('success') || cls.includes('green')) return `[${text}✓]`;
+        if (cls.includes('error') || cls.includes('red')) return `[${text}✗]`;
+        if (cls.includes('warning') || cls.includes('yellow')) return `[${text}⚠]`;
+        return `[${text}]`;
+      }
+    }
+    return null; // non-img elements without status class → normal extraction
+  }
+
+  // ── Generic <img> resolution ────────────────────────────────────────────
+  const alt = (el.alt || '').trim();
+  const src = (el.src || el.getAttribute('src') || '').toLowerCase();
+  const ariaLabel = (el.getAttribute('aria-label') || '').trim();
+  const title = (el.title || '').trim();
+  const cls = (el.getAttribute('class') || '').toLowerCase();
+
+  // Prefer explicit aria-label / title when meaningful
+  const label = ariaLabel || title || alt;
+
+  // Normalise known positive/negative keywords → symbols
+  const STATUS_POSITIVE = /^(\(tick\)|yes|true|supported|available|check|enabled|done|success|complete|✓|✔|☑)$/i;
+  const STATUS_NEGATIVE = /^(\(cross\)|no|false|unsupported|unavailable|disabled|✗|✘|☒|none|not supported|not available)$/i;
+  const STATUS_WARNING  = /^(\(warning\)|warning|partial|limited|⚠|△)$/i;
+  const STATUS_INFO     = /^(\(info\)|info|information|note|ℹ)$/i;
+
+  if (STATUS_POSITIVE.test(label)) return '✓';
+  if (STATUS_NEGATIVE.test(label)) return '✗';
+  if (STATUS_WARNING.test(label))  return '⚠';
+  if (STATUS_INFO.test(label))     return 'ℹ';
+
+  // CSS class hints (emoticon-tick, icon-check, fa-check-circle, …)
+  if (/emoticon-tick|icon-tick|icon-check|fa-check|check-mark|icon-yes/.test(cls)) return '✓';
+  if (/emoticon-cross|icon-cross|icon-times|fa-times|icon-no|icon-x\b/.test(cls)) return '✗';
+  if (/icon-warning|fa-warning|fa-exclamation/.test(cls)) return '⚠';
+
+  // Image src path hints
+  if (/[/_-](tick|check|yes|success|enabled|available|done|correct|complete|supported)[._/-]/.test(src)) return '✓';
+  if (/emoticons\/check/.test(src)) return '✓';
+  if (/[/_-](cross|no|false|disabled|unavailable|unsupported|wrong|error|fail|x)[._/-]/.test(src)) return '✗';
+  if (/emoticons\/cross/.test(src)) return '✗';
+  if (/[/_-](warning|warn|caution)[._/-]/.test(src)) return '⚠';
+
+  // Fall back to alt text if present (captures "(tick)", "(cross)" etc.)
+  if (alt) return alt;
+
+  return null; // unrecognised image — will be skipped by innerText anyway
+}
+
+/**
+ * Convert a <table> element into a Markdown table string.
+ * Each cell is extracted with full semantic awareness (status images, etc.).
+ */
+function tableToMarkdown(table) {
+  const rows = Array.from(table.querySelectorAll(':scope > * > tr, :scope > tr'));
+  if (!rows.length) return table.innerText.trim();
+
+  const grid = rows.map(row =>
+    Array.from(row.querySelectorAll('td, th')).map(cell => {
+      const text = extractElementText(cell).replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
+      return text || ' ';
+    })
+  );
+
+  if (!grid.length || !grid[0].length) return table.innerText.trim();
+
+  // Determine column count (handle ragged rows)
+  const colCount = Math.max(...grid.map(r => r.length));
+
+  const pad = row => {
+    while (row.length < colCount) row.push(' ');
+    return row;
+  };
+
+  const lines = [];
+  grid.forEach((row, i) => {
+    lines.push('| ' + pad(row).join(' | ') + ' |');
+    // Insert separator after the first row (header)
+    if (i === 0) lines.push('| ' + Array(colCount).fill('---').join(' | ') + ' |');
+  });
+
+  return lines.join('\n');
+}
+
+/**
+ * Extract meaningful text from a DOM element with semantic enhancements:
+ *  - Tables are converted to Markdown table syntax.
+ *  - Status images (Confluence emoticons, generic check/cross icons) are
+ *    resolved to Unicode symbols instead of being silently dropped.
+ *  - aria-label and title attributes are used as fallbacks for images.
+ */
+function extractElementText(element) {
+  // Walk child nodes and build a text representation
+  function walk(node) {
+    // Text node
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+    const tag = node.tagName.toUpperCase();
+
+    // Skip invisible or decorative elements
+    if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(tag)) return '';
+
+    // Table: reconstruct as Markdown
+    if (tag === 'TABLE') return '\n\n' + tableToMarkdown(node) + '\n\n';
+
+    // Table structural elements handled inside tableToMarkdown — skip at top level
+    if (['THEAD', 'TBODY', 'TFOOT', 'TR', 'TD', 'TH'].includes(tag)) {
+      return Array.from(node.childNodes).map(walk).join('');
+    }
+
+    // Images: attempt status resolution first
+    if (tag === 'IMG') {
+      const status = resolveStatusImage(node);
+      return status !== null ? status : '';
+    }
+
+    // Non-img elements: check for Confluence Status macro / lozenge
+    const statusText = resolveStatusImage(node);
+    if (statusText !== null) return statusText;
+
+    // Block-level elements: add newlines for readability
+    const BLOCK = ['P', 'DIV', 'SECTION', 'ARTICLE', 'BLOCKQUOTE',
+                   'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+                   'UL', 'OL', 'LI', 'DL', 'DT', 'DD',
+                   'FIGURE', 'FIGCAPTION', 'HEADER', 'FOOTER', 'ASIDE'];
+    const isBlock = BLOCK.includes(tag);
+
+    const inner = Array.from(node.childNodes).map(walk).join('');
+    return isBlock ? '\n' + inner + '\n' : inner;
+  }
+
+  const raw = walk(element);
+  // Normalise excessive blank lines while preserving intentional double-breaks
+  return raw.replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // Text processing
 function truncateContent(content, maxTokens = 50000) {
   // Rough estimation: 1 token ≈ 4 characters

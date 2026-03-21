@@ -127,7 +127,7 @@ function extractContent() {
   for (const selector of selectors) {
     const element = document.querySelector(selector);
     if (element && element.innerText.length > 200) {
-      content = element.innerText;
+      content = extractElementText(element);
       break;
     }
   }
@@ -137,10 +137,10 @@ function extractContent() {
     const bodyClone = document.body.cloneNode(true);
     ['script', 'style', 'nav', 'header', 'footer', 'aside', '.sidebar', '.navigation', '.menu', '.ad', 'iframe', 'noscript']
       .forEach(sel => bodyClone.querySelectorAll(sel).forEach(el => el.remove()));
-    content = bodyClone.innerText;
+    content = extractElementText(bodyClone);
   }
 
-  content = content.replace(/\s+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim();
+  content = content.replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 
   const metaDesc = document.querySelector('meta[name="description"]');
   const description = metaDesc ? metaDesc.getAttribute('content') : '';
