@@ -3,6 +3,7 @@ var floatingWindow = floatingWindow || null;
 var shadowRoot = shadowRoot || null;
 var isVisible = typeof isVisible !== 'undefined' ? isVisible : false;
 var isSelectionWindow = typeof isSelectionWindow !== 'undefined' ? isSelectionWindow : false;
+var miniFloatingBtn = miniFloatingBtn || null;
 
 // Initialize
 function init() {
@@ -676,6 +677,14 @@ async function createFloatingWindow(options = {}) {
         </span>
       </div>
       <div class="controls">
+        <button id="minimizeBtn" class="btn-icon" title="Minimize to floating button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 14 10 14 10 20"/>
+            <polyline points="20 10 14 10 14 4"/>
+            <line x1="10" y1="14" x2="3" y2="21"/>
+            <line x1="21" y1="3" x2="14" y2="10"/>
+          </svg>
+        </button>
         <button id="settingsBtn" class="btn-icon" title="Settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3" />
@@ -987,6 +996,9 @@ async function handleChatClick(root) {
 }
 
 async function toggleFloatingWindow(fromSelection = false, selectionRange = null) {
+  // If mini button is showing, hide it before toggling the main window
+  if (miniFloatingBtn) miniFloatingBtn.style.display = 'none';
+
   if (!floatingWindow) {
     try {
       const options = { fromSelection, selectionRange };
@@ -1121,6 +1133,89 @@ function hideFloatingWindow() {
   window.getSelection().removeAllRanges(); // Clear text selection
 }
 
+function minimizeFloatingWindow() {
+  if (!floatingWindow) return;
+
+  // Capture position before hiding
+  const rect = floatingWindow.getBoundingClientRect();
+  saveWindowState();
+  isVisible = false;
+  floatingWindow.style.display = 'none';
+
+  const btnSize = 48;
+
+  if (!miniFloatingBtn) {
+    miniFloatingBtn = document.createElement('div');
+    miniFloatingBtn.id = 'ask-web-mini-btn';
+    miniFloatingBtn.style.cssText =
+      'position:fixed;z-index:2147483647;width:48px;height:48px;border-radius:50%;' +
+      'background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;' +
+      'align-items:center;justify-content:center;cursor:pointer;' +
+      'box-shadow:0 4px 20px rgba(102,126,234,0.5);user-select:none;pointer-events:auto;' +
+      'transition:transform 0.15s,box-shadow 0.15s;';
+    miniFloatingBtn.innerHTML =
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="none">' +
+      '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    miniFloatingBtn.addEventListener('mouseenter', () => {
+      miniFloatingBtn.style.transform = 'scale(1.1)';
+      miniFloatingBtn.style.boxShadow = '0 6px 25px rgba(102,126,234,0.7)';
+    });
+    miniFloatingBtn.addEventListener('mouseleave', () => {
+      miniFloatingBtn.style.transform = '';
+      miniFloatingBtn.style.boxShadow = '0 4px 20px rgba(102,126,234,0.5)';
+    });
+    document.body.appendChild(miniFloatingBtn);
+    setupMiniBtnDrag(miniFloatingBtn, restoreFloatingWindow);
+  }
+
+  miniFloatingBtn.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - btnSize))}px`;
+  miniFloatingBtn.style.top = `${Math.max(0, Math.min(rect.top, window.innerHeight - btnSize))}px`;
+  miniFloatingBtn.style.display = 'flex';
+}
+
+async function restoreFloatingWindow() {
+  if (!floatingWindow) return;
+  if (miniFloatingBtn) miniFloatingBtn.style.display = 'none';
+  isVisible = true;
+  floatingWindow.style.display = 'block';
+  await loadLatestContent(shadowRoot);
+}
+
+function setupMiniBtnDrag(btn, onClickCallback) {
+  let hasMoved = false;
+  let startX, startY, startLeft, startTop;
+
+  function onMouseMove(e) {
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+    const btnSize = 48;
+    btn.style.left = `${Math.max(0, Math.min(startLeft + dx, window.innerWidth - btnSize))}px`;
+    btn.style.top = `${Math.max(0, Math.min(startTop + dy, window.innerHeight - btnSize))}px`;
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }
+
+  btn.addEventListener('mousedown', (e) => {
+    hasMoved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = parseInt(btn.style.left) || 0;
+    startTop = parseInt(btn.style.top) || 0;
+    e.preventDefault();
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+
+  btn.addEventListener('click', () => {
+    if (!hasMoved) onClickCallback();
+    hasMoved = false;
+  });
+}
+
 // Persistence Helper
 function saveWindowState() {
   if (!floatingWindow) return;
@@ -1249,6 +1344,7 @@ function setupEventListeners(root) {
   });
 
   root.getElementById('closeBtn').addEventListener('click', hideFloatingWindow);
+  root.getElementById('minimizeBtn').addEventListener('click', minimizeFloatingWindow);
 
   const settingsBtn = root.getElementById('settingsBtn');
   settingsBtn.addEventListener('click', () => {
