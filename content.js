@@ -897,6 +897,7 @@ async function registerShortcuts() {
   // Listen for storage changes to update shortcuts in real-time if settings change
   let templates = await getTemplates();
   let floatingShortcut = await getFloatingShortcut();
+  let chatShortcut = await getChatShortcut();
 
   chrome.storage.onChanged.addListener((changes) => {
     if (changes[StorageKeys.TEMPLATES]) {
@@ -904,6 +905,9 @@ async function registerShortcuts() {
     }
     if (changes[StorageKeys.FLOATING_SHORTCUT]) {
       floatingShortcut = changes[StorageKeys.FLOATING_SHORTCUT].newValue;
+    }
+    if (changes[StorageKeys.CHAT_SHORTCUT]) {
+      chatShortcut = changes[StorageKeys.CHAT_SHORTCUT].newValue;
     }
   });
 
@@ -934,6 +938,28 @@ async function registerShortcuts() {
         e.preventDefault();
         e.stopPropagation();
         toggleFloatingWindow();
+        return;
+      }
+    }
+
+    // Check Global Chat Shortcut
+    if (chatShortcut) {
+      const parts = chatShortcut.split('+');
+      const keyStr = parts.pop().toUpperCase();
+      const ctrl = parts.includes('Ctrl');
+      const alt = parts.includes('Alt');
+      const shift = parts.includes('Shift');
+      const meta = parts.includes('Meta');
+
+      if (e.key.toUpperCase() === keyStr &&
+        e.ctrlKey === ctrl &&
+        e.altKey === alt &&
+        e.shiftKey === shift &&
+        e.metaKey === meta) {
+
+        e.preventDefault();
+        e.stopPropagation();
+        handleChatClick();
         return;
       }
     }

@@ -6,6 +6,7 @@ let editingTemplateId = null;
 // DOM Elements
 const apiKeyInput = document.getElementById('apiKey');
 const floatingShortcutInput = document.getElementById('floatingShortcut');
+const chatShortcutInput = document.getElementById('chatShortcut');
 const toggleKeyBtn = document.getElementById('toggleKey');
 const apiBaseUrlInput = document.getElementById('apiBaseUrl');
 const modelSelect = document.getElementById('model');
@@ -73,6 +74,10 @@ async function loadSettings() {
   // Load floating shortcut
   const floatingShortcut = await getFloatingShortcut();
   floatingShortcutInput.value = floatingShortcut;
+
+  // Load chat shortcut
+  const chatShortcut = await getChatShortcut();
+  chatShortcutInput.value = chatShortcut;
 
   const apiBaseUrl = await getApiBaseUrl();
   apiBaseUrlInput.value = apiBaseUrl;
@@ -166,9 +171,9 @@ function setupEventListeners() {
     showStatus('Shortcut saved', 'success');
   });
 
-  // Floating Shortcut Recording
-  setupShortcutInput(floatingShortcutInput, async (shortcut) => {
-    await setFloatingShortcut(shortcut);
+  // Chat Shortcut Recording
+  setupShortcutInput(chatShortcutInput, async (shortcut) => {
+    await setChatShortcut(shortcut);
     showStatus('Shortcut saved', 'success');
   });
 

@@ -7,6 +7,7 @@ var StorageKeys = StorageKeys || {
   DEFAULT_TEMPLATE: 'default_template',
   THEME: 'theme',
   FLOATING_SHORTCUT: 'floating_shortcut',
+  CHAT_SHORTCUT: 'chat_shortcut',
   ENABLE_SELECTION_ICON: 'enable_selection_icon',
   SELECTION_MODEL: 'selection_model',
   SELECTION_PROMPT: 'selection_prompt',
@@ -137,6 +138,15 @@ async function getFloatingShortcut() {
 
 async function setFloatingShortcut(shortcut) {
   await setStorage({ [StorageKeys.FLOATING_SHORTCUT]: shortcut });
+}
+
+async function getChatShortcut() {
+  const result = await getStorage([StorageKeys.CHAT_SHORTCUT]);
+  return result[StorageKeys.CHAT_SHORTCUT] || '';
+}
+
+async function setChatShortcut(shortcut) {
+  await setStorage({ [StorageKeys.CHAT_SHORTCUT]: shortcut });
 }
 
 // Text Selection Settings
