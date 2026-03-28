@@ -210,7 +210,14 @@ function setupEventListeners() {
 
 function renderTemplates() {
   templateList.innerHTML = templates.map(template => `
-    <div class="template-item" data-id="${template.id}">
+    <div class="template-item" draggable="true" data-id="${template.id}">
+      <div class="drag-handle" title="Drag to reorder">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
+          <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+          <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
+        </svg>
+      </div>
       <div class="template-info">
         <div class="template-name">
           ${escapeHtml(template.name)}
@@ -229,14 +236,12 @@ function renderTemplates() {
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
         </button>
-        ${!template.isDefault ? `
-          <button class="btn-icon btn-danger delete-template" data-id="${template.id}" title="Delete">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-        ` : ''}
+        <button class="btn-icon btn-danger delete-template" data-id="${template.id}" title="Delete">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
       </div>
     </div>
   `).join('');
@@ -249,6 +254,9 @@ function renderTemplates() {
   document.querySelectorAll('.delete-template').forEach(btn => {
     btn.addEventListener('click', () => deleteTemplate(btn.dataset.id));
   });
+
+  // Drag-and-drop reordering
+  setupDragAndDrop();
 }
 
 function editTemplate(id) {
@@ -333,4 +341,57 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Drag-and-drop reordering
+let draggedItem = null;
+
+function setupDragAndDrop() {
+  const items = templateList.querySelectorAll('.template-item');
+
+  items.forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      draggedItem = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      items.forEach(i => i.classList.remove('drag-over'));
+      draggedItem = null;
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (item !== draggedItem) {
+        items.forEach(i => i.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      }
+    });
+
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drag-over');
+    });
+
+    item.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (!draggedItem || item === draggedItem) return;
+
+      const fromId = draggedItem.dataset.id;
+      const toId = item.dataset.id;
+      const fromIndex = templates.findIndex(t => t.id === fromId);
+      const toIndex = templates.findIndex(t => t.id === toId);
+      if (fromIndex === -1 || toIndex === -1) return;
+
+      const [moved] = templates.splice(fromIndex, 1);
+      templates.splice(toIndex, 0, moved);
+
+      await setTemplates(templates);
+      renderTemplates();
+      showStatus('Template order saved', 'success');
+    });
+  });
 }
