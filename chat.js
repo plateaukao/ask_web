@@ -178,6 +178,9 @@ function handleStreamEnd() {
   if (currentStreamContent) {
     messages.push({ role: 'assistant', content: currentStreamContent });
   }
+  if (currentStreamElement) {
+    addCopyButton(currentStreamElement, currentStreamContent);
+  }
   currentStreamContent = '';
   currentStreamElement = null;
   isLoading = false;
@@ -287,6 +290,10 @@ function addMessage(role, content) {
     <div class="message-content">${renderMarkdown(content)}</div>
   `;
 
+  if (role === 'assistant') {
+    addCopyButton(messageEl, content);
+  }
+
   messagesContainer.appendChild(messageEl);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
@@ -309,6 +316,33 @@ function createStreamingMessage() {
   messagesContainer.appendChild(messageEl);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
   return messageEl;
+}
+
+function addCopyButton(messageEl, rawContent) {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.title = 'Copy to clipboard';
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>`;
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(rawContent);
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>`;
+      setTimeout(() => {
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>`;
+      }, 2000);
+    } catch (e) {
+      // fallback ignored
+    }
+  });
+  messageEl.appendChild(btn);
 }
 
 // Markdown rendering using marked.js (loaded via CDN in HTML)
