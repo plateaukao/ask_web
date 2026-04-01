@@ -11,10 +11,12 @@ var StorageKeys = StorageKeys || {
   ENABLE_SELECTION_ICON: 'enable_selection_icon',
   SELECTION_MODEL: 'selection_model',
   SELECTION_PROMPT: 'selection_prompt',
-  SELECTION_ICON_TRIGGER_MODE: 'selection_icon_trigger_mode'
+  SELECTION_ICON_TRIGGER_MODE: 'selection_icon_trigger_mode',
+  MAX_TOKENS: 'max_tokens'
 };
 
 const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
+const DEFAULT_MAX_TOKENS = 100000;
 
 // Theme Helper
 async function initTheme() {
@@ -102,6 +104,16 @@ function normalizeApiBaseUrl(url) {
   const trimmed = (url || '').trim();
   const base = trimmed || DEFAULT_API_BASE_URL;
   return base.replace(/\/+$/, '');
+}
+
+async function getMaxTokens() {
+  const result = await getStorage([StorageKeys.MAX_TOKENS]);
+  const val = parseInt(result[StorageKeys.MAX_TOKENS], 10);
+  return val > 0 ? val : DEFAULT_MAX_TOKENS;
+}
+
+async function setMaxTokens(tokens) {
+  await setStorage({ [StorageKeys.MAX_TOKENS]: tokens });
 }
 
 async function getModel() {

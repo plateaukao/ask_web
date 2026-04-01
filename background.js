@@ -11,6 +11,13 @@ async function getStorageValue(key) {
 
 const API_BASE_KEY = 'openai_api_base_url';
 const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
+const MAX_TOKENS_KEY = 'max_tokens';
+const DEFAULT_MAX_TOKENS = 100000;
+
+async function getMaxTokens() {
+  const val = parseInt(await getStorageValue(MAX_TOKENS_KEY), 10);
+  return val > 0 ? val : DEFAULT_MAX_TOKENS;
+}
 
 async function getApiBaseUrl() {
   const stored = await getStorageValue(API_BASE_KEY);
@@ -127,11 +134,12 @@ async function handleSummarize(request) {
     }
   ];
 
+  const maxTokens = await getMaxTokens();
   // For popup, we'll do non-streaming for simplicity but can be changed
   const body = prepareRequestBody(model, {
     messages: messages,
     temperature: 0.7,
-    max_tokens: 10000,
+    max_tokens: maxTokens,
     stream: false
   });
 
@@ -162,10 +170,11 @@ async function handleChat(request) {
 
   const model = request.model || await getStorageValue('openai_model') || 'gpt-5.1';
 
+  const maxTokens = await getMaxTokens();
   const body = prepareRequestBody(model, {
     messages: request.messages,
     temperature: 0.7,
-    max_tokens: 10000,
+    max_tokens: maxTokens,
     stream: false
   });
 
@@ -202,10 +211,11 @@ async function handleStreamRequest(request, sender) {
   const model = request.model || await getStorageValue('openai_model') || 'gpt-5.1';
 
   try {
+    const maxTokens = await getMaxTokens();
     const body = prepareRequestBody(model, {
       messages: request.messages,
       temperature: 0.7,
-      max_tokens: 10000,
+      max_tokens: maxTokens,
       stream: true
     });
 
@@ -302,10 +312,11 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
   const targetTabId = sender?.tab?.id;
 
   try {
+    const maxTokens = await getMaxTokens();
     const body = prepareRequestBody(model, {
       messages: request.messages,
       temperature: 0.7,
-      max_tokens: 10000,
+      max_tokens: maxTokens,
       stream: true
     });
 

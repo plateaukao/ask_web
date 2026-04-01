@@ -27,6 +27,7 @@ const statusEl = document.getElementById('status');
 const enableSelectionIconInput = document.getElementById('enableSelectionIcon');
 const selectionModelSelect = document.getElementById('selectionModel');
 const selectionPromptInput = document.getElementById('selectionPrompt');
+const maxTokensInput = document.getElementById('maxTokens');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -104,6 +105,10 @@ async function loadSettings() {
   // Load trigger mode
   const triggerMode = selectionConfig.triggerMode || 'click';
   document.querySelector(`input[name="selectionTriggerMode"][value="${triggerMode}"]`).checked = true;
+
+  // Load max tokens
+  const maxTokens = await getMaxTokens();
+  maxTokensInput.value = maxTokens;
 }
 
 function setupEventListeners() {
@@ -202,6 +207,17 @@ function setupEventListeners() {
       await setSelectionConfig({ triggerMode: e.target.value });
       showStatus('Trigger mode saved', 'success');
     });
+  });
+
+  // Save max tokens
+  maxTokensInput.addEventListener('change', async () => {
+    const val = parseInt(maxTokensInput.value, 10);
+    if (val > 0) {
+      await setMaxTokens(val);
+      showStatus('Max tokens saved', 'success');
+    } else {
+      showStatus('Please enter a valid number', 'error');
+    }
   });
 
   // Save template
