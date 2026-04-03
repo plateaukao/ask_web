@@ -36,7 +36,8 @@ async function getApiEndpoint(path = '') {
 // State tracking
 let popupState = {
   isStreaming: false,
-  content: ''
+  content: '',
+  tabId: null
 };
 
 // Handle extension icon click
@@ -297,15 +298,17 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     return;
   }
 
+  // Determine target: sender tab (content script) or runtime (popup)
+  const targetTabId = sender?.tab?.id;
+
   // Reset state
   popupState = {
     isStreaming: true,
-    content: ''
+    content: '',
+    tabId: targetTabId || null
   };
 
   const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
-  // Determine target: sender tab (content script) or runtime (popup)
-  const targetTabId = sender?.tab?.id;
 
   try {
     const maxTokens = await getMaxTokens();
