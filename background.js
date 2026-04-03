@@ -40,6 +40,24 @@ let popupState = {
   tabId: null
 };
 
+// Context menu for text selection
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'ask-web-selection',
+    title: 'Ask Web about "%s"',
+    contexts: ['selection']
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'ask-web-selection' && info.selectionText) {
+    chrome.tabs.sendMessage(tab.id, {
+      action: 'contextMenuSelection',
+      selectionText: info.selectionText
+    });
+  }
+});
+
 // Handle extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
   try {

@@ -20,6 +20,8 @@ function init() {
       toggleFloatingWindow();
     } else if (request.action === 'extractContent') {
       sendResponse(extractPageContent());
+    } else if (request.action === 'contextMenuSelection') {
+      handleContextMenuSelection(request.selectionText);
     }
   });
 
@@ -2085,6 +2087,36 @@ function buildSelectionHistoryMetadata(selectionText, context) {
     selectedText: selected,
     context: compactContext
   };
+}
+
+async function handleContextMenuSelection(selectionText) {
+  if (!selectionText || selectionText.trim().length < 2) return;
+
+  const config = await getSelectionConfig();
+  const context = { before: '', after: '' };
+  const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
+  const actionContext = buildSelectionContextForAction(selectionText, context);
+
+  let prompt = config.prompt;
+  prompt = prompt.replace(/{{selection}}/g, selectionText);
+  prompt = prompt.replace(/{{content}}/g, actionContext);
+  const finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
+
+  if (!isVisible) {
+    await toggleFloatingWindow(true);
+  }
+
+  const maxWait = 20;
+  let waited = 0;
+  const timer = setInterval(() => {
+    if (shadowRoot || waited > maxWait) {
+      clearInterval(timer);
+      if (shadowRoot) {
+        handleTemplateClick(shadowRoot, finalPrompt, config.model, historyMetadata);
+      }
+    }
+    waited++;
+  }, 100);
 }
 
 function buildSelectionContextForAction(selectionText, context) {
