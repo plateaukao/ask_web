@@ -1,4 +1,11 @@
 // Background service worker for API calls
+import {
+  DEFAULT_API_BASE_URL,
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_MODEL,
+  STORAGE_KEYS,
+  normalizeApiBaseUrl
+} from './shared.js';
 
 // Get storage value helper
 async function getStorageValue(key) {
@@ -9,26 +16,14 @@ async function getStorageValue(key) {
   });
 }
 
-const API_BASE_KEY = 'openai_api_base_url';
-const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
-const MAX_TOKENS_KEY = 'max_tokens';
-const DEFAULT_MAX_TOKENS = 100000;
-const DEFAULT_MODEL = 'gpt-5.2-pro';
-
 async function getMaxTokens() {
-  const val = parseInt(await getStorageValue(MAX_TOKENS_KEY), 10);
+  const val = parseInt(await getStorageValue(STORAGE_KEYS.MAX_TOKENS), 10);
   return val > 0 ? val : DEFAULT_MAX_TOKENS;
 }
 
 async function getApiBaseUrl() {
-  const stored = await getStorageValue(API_BASE_KEY);
+  const stored = await getStorageValue(STORAGE_KEYS.API_BASE_URL);
   return normalizeApiBaseUrl(stored);
-}
-
-function normalizeApiBaseUrl(url) {
-  const trimmed = (url || '').trim();
-  const base = trimmed || DEFAULT_API_BASE_URL;
-  return base.replace(/\/+$/, '');
 }
 
 async function getApiEndpoint(path = '') {
@@ -117,12 +112,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleSummarize(request) {
-  const apiKey = await getStorageValue('openai_api_key');
+  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
   if (!apiKey) {
     throw new Error('Please set your OpenAI API key in the extension settings');
   }
 
-  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
+  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
 
   const messages = [
     {
@@ -164,12 +159,12 @@ async function handleSummarize(request) {
 }
 
 async function handleChat(request) {
-  const apiKey = await getStorageValue('openai_api_key');
+  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
   if (!apiKey) {
     throw new Error('Please set your OpenAI API key in the extension settings');
   }
 
-  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
+  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
 
   const maxTokens = await getMaxTokens();
   const body = prepareRequestBody(model, {
@@ -200,7 +195,7 @@ async function handleChat(request) {
 
 // Streaming handler for chat page
 async function handleStreamRequest(request, sender) {
-  const apiKey = await getStorageValue('openai_api_key');
+  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
   if (!apiKey) {
     chrome.tabs.sendMessage(sender.tab.id, {
       action: 'streamError',
@@ -209,7 +204,7 @@ async function handleStreamRequest(request, sender) {
     return;
   }
 
-  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
+  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
 
   try {
     const maxTokens = await getMaxTokens();
@@ -285,7 +280,7 @@ async function handleStreamRequest(request, sender) {
 
 // Streaming handler for popup
 async function handlePopupStreamRequest(request, sender) { // Added sender
-  const apiKey = await getStorageValue('openai_api_key');
+  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
   if (!apiKey) {
     const errorMsg = 'Please set your OpenAI API key in the extension settings';
     if (sender?.tab?.id) {
@@ -308,7 +303,7 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     content: ''
   };
 
-  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
+  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
   // Determine target: sender tab (content script) or runtime (popup)
   const targetTabId = sender?.tab?.id;
 

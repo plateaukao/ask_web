@@ -15,6 +15,8 @@ var StorageKeys = StorageKeys || {
   MAX_TOKENS: 'max_tokens'
 };
 
+// These constants mirror shared.js — keep in sync.
+// Content scripts cannot use ES module imports, so values are duplicated here.
 const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MAX_TOKENS = 100000;
 
@@ -102,6 +104,7 @@ async function setApiBaseUrl(url) {
   await setStorage({ [StorageKeys.API_BASE_URL]: normalizeApiBaseUrl(url) });
 }
 
+// Mirrors shared.js normalizeApiBaseUrl — keep in sync
 function normalizeApiBaseUrl(url) {
   const trimmed = (url || '').trim();
   const base = trimmed || DEFAULT_API_BASE_URL;
