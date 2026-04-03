@@ -48,6 +48,8 @@ var DefaultModels = DefaultModels || [
   { id: 'gpt-4.1', name: 'GPT-4.1' }
 ];
 
+const DEFAULT_MODEL = DefaultModels[0].id;
+
 var DefaultTemplates = DefaultTemplates || [
   {
     id: 'summarize',
@@ -118,7 +120,7 @@ async function setMaxTokens(tokens) {
 
 async function getModel() {
   const result = await getStorage([StorageKeys.MODEL]);
-  return result[StorageKeys.MODEL] || 'gpt-4.1-mini';
+  return result[StorageKeys.MODEL] || DEFAULT_MODEL;
 }
 
 async function setModel(model) {

@@ -13,6 +13,7 @@ const API_BASE_KEY = 'openai_api_base_url';
 const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
 const MAX_TOKENS_KEY = 'max_tokens';
 const DEFAULT_MAX_TOKENS = 100000;
+const DEFAULT_MODEL = 'gpt-5.2-pro';
 
 async function getMaxTokens() {
   const val = parseInt(await getStorageValue(MAX_TOKENS_KEY), 10);
@@ -121,7 +122,7 @@ async function handleSummarize(request) {
     throw new Error('Please set your OpenAI API key in the extension settings');
   }
 
-  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.2-pro';
+  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
 
   const messages = [
     {
@@ -168,7 +169,7 @@ async function handleChat(request) {
     throw new Error('Please set your OpenAI API key in the extension settings');
   }
 
-  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.1';
+  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
 
   const maxTokens = await getMaxTokens();
   const body = prepareRequestBody(model, {
@@ -208,7 +209,7 @@ async function handleStreamRequest(request, sender) {
     return;
   }
 
-  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.1';
+  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
 
   try {
     const maxTokens = await getMaxTokens();
@@ -307,7 +308,7 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     content: ''
   };
 
-  const model = request.model || await getStorageValue('openai_model') || 'gpt-5.1';
+  const model = request.model || await getStorageValue('openai_model') || DEFAULT_MODEL;
   // Determine target: sender tab (content script) or runtime (popup)
   const targetTabId = sender?.tab?.id;
 
