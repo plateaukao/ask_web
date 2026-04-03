@@ -1560,8 +1560,17 @@ function buildSelectionHistoryMetadata(selectionText, context) {
 async function handleContextMenuSelection(selectionText) {
   if (!selectionText || selectionText.trim().length < 2) return;
 
+  // Try to capture the live selection range for surrounding context
+  const selection = window.getSelection();
+  let range = null;
+  let context = { before: '', after: '' };
+
+  if (selection && selection.rangeCount > 0) {
+    range = selection.getRangeAt(0).cloneRange();
+    context = getSelectionContext(range);
+  }
+
   const config = await getSelectionConfig();
-  const context = { before: '', after: '' };
   const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
   const actionContext = buildSelectionContextForAction(selectionText, context);
 
@@ -1571,7 +1580,7 @@ async function handleContextMenuSelection(selectionText) {
   const finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
 
   if (!isVisible) {
-    await toggleFloatingWindow(true);
+    await toggleFloatingWindow(true, range);
   }
 
   const maxWait = 20;
