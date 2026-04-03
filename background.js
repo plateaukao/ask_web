@@ -282,7 +282,7 @@ async function handleStreamRequest(request, sender) {
               });
             }
           } catch (e) {
-            // Skip invalid JSON
+            console.warn('[Ask Web] Failed to parse streaming chunk:', data, e.message);
           }
         }
       }
@@ -397,7 +397,7 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
               }
             }
           } catch (e) {
-            // Skip invalid JSON
+            console.warn('[Ask Web] Failed to parse streaming chunk:', data, e.message);
           }
         }
       }
