@@ -212,7 +212,15 @@
               <label for="templatePrompt">Prompt</label>
               <textarea id="templatePrompt" rows="6"
                 placeholder="Enter your prompt here. Use {{content}} as placeholder for web content."></textarea>
-              <small>Use <code>{{content}}</code> to insert the web content</small>
+              <small>Use <code>{{content}}</code> to insert the web content, <code>{{selection}}</code> for selected text</small>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="templateShowInSelection">
+                <span class="checkbox-custom"></span>
+                Show in text selection actions
+              </label>
+              <small>When enabled, this template appears as an option when you select text on a page.</small>
             </div>
           </div>
           <div class="modal-footer">

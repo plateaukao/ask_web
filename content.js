@@ -1319,6 +1319,14 @@ async function registerSelectionListener() {
         selectionIconShadow = null;
       }
     }
+    if (changes[StorageKeys.TEMPLATES]) {
+      // Recreate icon to pick up showInSelection changes
+      if (selectionIcon) {
+        selectionIcon.remove();
+        selectionIcon = null;
+        selectionIconShadow = null;
+      }
+    }
   });
 }
 
@@ -1351,9 +1359,13 @@ async function handleSelection(e) {
 }
 
 async function showSelectionIcon(range) {
-  if (!selectionIcon) {
-    await createSelectionIcon();
+  // Recreate each time to pick up template changes
+  if (selectionIcon) {
+    selectionIcon.remove();
+    selectionIcon = null;
+    selectionIconShadow = null;
   }
+  await createSelectionIcon();
 
   const rects = range.getClientRects();
   if (rects.length === 0) return;
@@ -1395,27 +1407,74 @@ async function createSelectionIcon() {
 
   const style = document.createElement('style');
   style.textContent = `
-    .icon {
-      width: 32px;
-      height: 32px;
+    .selection-container {
+      display: flex;
+      align-items: stretch;
       background: #fff;
       border: 2px solid #000;
       border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .icon {
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.2s;
       cursor: pointer;
+      flex-shrink: 0;
     }
     .icon:hover {
-      transform: scale(1.1);
+      background: #f0f0f0;
     }
-    svg {
+    .icon svg {
       color: #000;
       width: 18px;
       height: 18px;
     }
+    .action-menu {
+      display: none;
+      flex-direction: row;
+      align-items: stretch;
+      max-width: 0;
+      overflow: hidden;
+      transition: max-width 0.2s ease;
+    }
+    .selection-container:hover .action-menu,
+    .selection-container.expanded .action-menu {
+      display: flex;
+      max-width: 600px;
+    }
+    .action-menu .divider {
+      width: 1px;
+      background: #ddd;
+      flex-shrink: 0;
+    }
+    .action-btn {
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      white-space: nowrap;
+      font-size: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #333;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      height: 32px;
+      transition: background 0.15s;
+    }
+    .action-btn:hover {
+      background: #e8e8e8;
+    }
+    .action-btn.default-action {
+      font-weight: 600;
+    }
   `;
+
+  const container = document.createElement('div');
+  container.className = 'selection-container';
 
   const icon = document.createElement('div');
   icon.className = 'icon';
@@ -1427,30 +1486,90 @@ async function createSelectionIcon() {
     </svg>
   `;
 
-  // Attach event listener based on trigger mode
-  if (triggerMode === 'hover') {
-    icon.addEventListener('mouseenter', (e) => {
+  const actionMenu = document.createElement('div');
+  actionMenu.className = 'action-menu';
+
+  container.appendChild(icon);
+  container.appendChild(actionMenu);
+
+  // Load templates with showInSelection
+  const templates = await getTemplates();
+  const selectionTemplates = templates.filter(t => t.showInSelection);
+
+  if (selectionTemplates.length > 0) {
+    // Add default action button first
+    const divider = document.createElement('div');
+    divider.className = 'divider';
+    actionMenu.appendChild(divider);
+
+    const defaultBtn = document.createElement('button');
+    defaultBtn.className = 'action-btn default-action';
+    defaultBtn.textContent = 'Default';
+    defaultBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSelectionIconClick();
+    });
+    actionMenu.appendChild(defaultBtn);
+
+    // Add each selection template as an action button
+    selectionTemplates.forEach(tmpl => {
+      const sep = document.createElement('div');
+      sep.className = 'divider';
+      actionMenu.appendChild(sep);
+
+      const btn = document.createElement('button');
+      btn.className = 'action-btn';
+      btn.textContent = tmpl.name;
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model });
+      });
+      actionMenu.appendChild(btn);
+    });
+
+    // Main icon click triggers default action (when no menu templates)
+    icon.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
       handleSelectionIconClick();
     });
   } else {
-    // Default to click mode
-    icon.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // Prevent losing selection
-      e.stopPropagation();
-      handleSelectionIconClick();
-    });
+    // No selection templates — original behavior: icon triggers action directly
+    if (triggerMode === 'hover') {
+      icon.addEventListener('mouseenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelectionIconClick();
+      });
+    } else {
+      icon.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelectionIconClick();
+      });
+    }
   }
 
   selectionIconShadow.appendChild(style);
-  selectionIconShadow.appendChild(icon);
+  selectionIconShadow.appendChild(container);
 
   document.body.appendChild(selectionIcon);
 }
 
-async function handleSelectionIconClick() {
+async function handleSelectionIconClick(templateOverride) {
   hideSelectionIcon(); // Hide immediately for better UX
+
+  // Clear previous result immediately so stale content isn't visible
+  if (shadowRoot) {
+    const resultContent = shadowRoot.getElementById('resultContent');
+    if (resultContent) resultContent.innerHTML = '';
+    const resultArea = shadowRoot.getElementById('resultArea');
+    if (resultArea) resultArea.classList.add('hidden');
+    currentStreamContent = '';
+  }
+
   const config = await getSelectionConfig();
   const selectionText = currentSelection.text;
 
@@ -1458,33 +1577,20 @@ async function handleSelectionIconClick() {
   const context = getSelectionContext(currentSelection.range);
   const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
 
-  // Prepare Prompt
-  // Replace {{selection}} and ensure context is added if not explicitly in prompt
-  let prompt = config.prompt;
-
-  // If prompt uses {{selection}}, put the selection there.
-  // We also want to provide context.
-  // Best approach: Construct a full prompt string that the user sees as the "User Prompt" to the model?
-  // Or inject it into the system prompt?
-  // The current `handleTemplateClick` sends `prompt` as the user message.
+  // Use template override prompt/model if provided, otherwise use default selection config
+  let prompt = (templateOverride && templateOverride.prompt) ? templateOverride.prompt : config.prompt;
+  const model = (templateOverride && templateOverride.model) ? templateOverride.model : config.model;
 
   const actionContext = buildSelectionContextForAction(selectionText, context);
-
-  // If user prompt has {{selection}}, replace it.
-  // If user prompt has {{content}}, replace it with full context + selection?
-  // Let's replace {{selection}} with the selection.
-  // And replace {{content}} with selection (for backward compat if they use generic templates).
 
   prompt = prompt.replace(/{{selection}}/g, selectionText);
   prompt = prompt.replace(/{{content}}/g, actionContext);
 
-  // Append context to the prompt transparently or prefix it?
-  // "Using the following context: ... \n\n [User Prompt]"
   const finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
 
   // Open Floating Window with half height for selection actions
   if (!isVisible) {
-    await toggleFloatingWindow(true, currentSelection.range); // Pass selection range for positioning
+    await toggleFloatingWindow(true, currentSelection.range);
   }
 
   // Wait for window to be ready
@@ -1494,8 +1600,7 @@ async function handleSelectionIconClick() {
     if (shadowRoot || waited > maxWait) {
       clearInterval(timer);
       if (shadowRoot) {
-        // Trigger generic template handler but with our specific prompt
-        handleTemplateClick(shadowRoot, finalPrompt, config.model, historyMetadata);
+        handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
       }
     }
     waited++;

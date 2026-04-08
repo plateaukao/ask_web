@@ -18,6 +18,7 @@ const templateNameInput = document.getElementById('templateName');
 const templateModelSelect = document.getElementById('templateModel');
 const templateShortcutInput = document.getElementById('templateShortcut');
 const templatePromptInput = document.getElementById('templatePrompt');
+const templateShowInSelectionInput = document.getElementById('templateShowInSelection');
 const saveTemplateBtn = document.getElementById('saveTemplate');
 const cancelTemplateBtn = document.getElementById('cancelTemplate');
 const closeModalBtn = document.getElementById('closeModal');
@@ -159,6 +160,7 @@ function setupEventListeners() {
     modalTitle.textContent = 'Add Template';
     templateNameInput.value = '';
     templatePromptInput.value = '';
+    templateShowInSelectionInput.checked = false;
     templateModal.classList.add('active');
   });
 
@@ -238,6 +240,7 @@ function renderTemplates() {
         <div class="template-name">
           ${escapeHtml(template.name)}
           ${template.isDefault ? '<span class="template-badge">Built-in</span>' : ''}
+          ${template.showInSelection ? '<span class="template-badge selection-badge">Selection</span>' : ''}
           ${template.shortcut ? `<span class="shortcut-badge">${escapeHtml(template.shortcut)}</span>` : ''}
         </div>
         <div class="template-preview">
@@ -285,6 +288,7 @@ function editTemplate(id) {
   templateModelSelect.value = template.model || '';
   templateShortcutInput.value = template.shortcut || '';
   templatePromptInput.value = template.prompt;
+  templateShowInSelectionInput.checked = !!template.showInSelection;
   templateModal.classList.add('active');
 }
 
@@ -299,11 +303,14 @@ async function saveTemplate() {
     return;
   }
 
+  const showInSelection = templateShowInSelectionInput.checked;
+
   const templateData = {
     name,
     prompt,
     model: model || undefined,
-    shortcut: shortcut || undefined
+    shortcut: shortcut || undefined,
+    showInSelection
   };
 
   if (editingTemplateId) {

@@ -413,6 +413,16 @@ code {
   border: 1px solid rgba(102, 126, 234, 0.4);
 }
 
+.template-badge.selection-badge {
+  background: linear-gradient(135deg, #43b581, #3ca374);
+}
+
+:root[data-theme="light"] .template-badge.selection-badge {
+  background: transparent;
+  color: #3ca374;
+  border: 1px solid rgba(60, 163, 116, 0.4);
+}
+
 /* Drag handle */
 .drag-handle {
   display: flex;
