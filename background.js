@@ -26,9 +26,18 @@ async function getApiBaseUrl() {
   return normalizeApiBaseUrl(stored);
 }
 
+function isOllamaUrl(url) {
+  return /localhost|127\.0\.0\.1/.test(url) && url.includes('11434');
+}
+
 async function getApiEndpoint(path = '') {
   const base = await getApiBaseUrl();
   if (!path) return base;
+  // For Ollama, use native /api/chat instead of /v1/chat/completions
+  if (isOllamaUrl(base) && path === 'chat/completions') {
+    const origin = base.replace(/\/v1\/?$/, '');
+    return `${origin}/api/chat`;
+  }
   const normalizedPath = '/' + path.replace(/^\/+/, '');
   return `${base}${normalizedPath}`;
 }
@@ -150,13 +159,14 @@ async function handleSummarize(request) {
   ];
 
   const maxTokens = await getMaxTokens();
+  const apiBaseUrl = await getApiBaseUrl();
   // For popup, we'll do non-streaming for simplicity but can be changed
   const body = prepareRequestBody(model, {
     messages: messages,
     temperature: 0.7,
     max_tokens: maxTokens,
     stream: false
-  });
+  }, apiBaseUrl);
 
   const endpoint = await getApiEndpoint('chat/completions');
   const response = await fetch(endpoint, {
@@ -169,12 +179,20 @@ async function handleSummarize(request) {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'API request failed');
+    let errorMsg = `API request failed (${response.status}) - ${endpoint}`;
+    try {
+      const error = await response.json();
+      errorMsg = error.error?.message || errorMsg;
+    } catch (e) {
+      // Response body is not valid JSON
+    }
+    throw new Error(errorMsg);
   }
 
   const data = await response.json();
-  return { result: data.choices[0].message.content };
+  // Ollama native: data.message.content, OpenAI: data.choices[0].message.content
+  const content = data.message?.content || data.choices?.[0]?.message?.content;
+  return { result: content };
 }
 
 async function handleChat(request) {
@@ -186,12 +204,13 @@ async function handleChat(request) {
   const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
 
   const maxTokens = await getMaxTokens();
+  const apiBaseUrl = await getApiBaseUrl();
   const body = prepareRequestBody(model, {
     messages: request.messages,
     temperature: 0.7,
     max_tokens: maxTokens,
     stream: false
-  });
+  }, apiBaseUrl);
 
   const endpoint = await getApiEndpoint('chat/completions');
   const response = await fetch(endpoint, {
@@ -204,12 +223,19 @@ async function handleChat(request) {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'API request failed');
+    let errorMsg = `API request failed (${response.status}) - ${endpoint}`;
+    try {
+      const error = await response.json();
+      errorMsg = error.error?.message || errorMsg;
+    } catch (e) {
+      // Response body is not valid JSON
+    }
+    throw new Error(errorMsg);
   }
 
   const data = await response.json();
-  return { result: data.choices[0].message.content };
+  const content = data.message?.content || data.choices?.[0]?.message?.content;
+  return { result: content };
 }
 
 // Streaming handler for chat page
@@ -227,12 +253,13 @@ async function handleStreamRequest(request, sender) {
 
   try {
     const maxTokens = await getMaxTokens();
+    const apiBaseUrl = await getApiBaseUrl();
     const body = prepareRequestBody(model, {
       messages: request.messages,
       temperature: 0.7,
       max_tokens: maxTokens,
       stream: true
-    });
+    }, apiBaseUrl);
 
     const endpoint = await getApiEndpoint('chat/completions');
     const response = await fetch(endpoint, {
@@ -245,14 +272,21 @@ async function handleStreamRequest(request, sender) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      let errorMsg = `API request failed (${response.status}) - ${endpoint}`;
+      try {
+        const error = await response.json();
+        errorMsg = error.error?.message || errorMsg;
+      } catch (e) {
+        // Response body is not valid JSON (e.g. HTML error page)
+      }
       chrome.tabs.sendMessage(sender.tab.id, {
         action: 'streamError',
-        error: error.error?.message || 'API request failed'
+        error: errorMsg
       });
       return;
     }
 
+    const ollama = isOllamaUrl(apiBaseUrl);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -266,24 +300,17 @@ async function handleStreamRequest(request, sender) {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            chrome.tabs.sendMessage(sender.tab.id, { action: 'streamEnd' });
-            return;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices[0]?.delta?.content;
-            if (content) {
-              chrome.tabs.sendMessage(sender.tab.id, {
-                action: 'streamChunk',
-                content: content
-              });
-            }
-          } catch (e) {
-            console.warn('[Ask Web] Failed to parse streaming chunk:', data, e.message);
-          }
+        const chunk = parseStreamChunk(line, ollama);
+        if (chunk.error) {
+          chrome.tabs.sendMessage(sender.tab.id, { action: 'streamError', error: chunk.error });
+          return;
+        }
+        if (chunk.done) {
+          chrome.tabs.sendMessage(sender.tab.id, { action: 'streamEnd' });
+          return;
+        }
+        if (chunk.content) {
+          chrome.tabs.sendMessage(sender.tab.id, { action: 'streamChunk', content: chunk.content });
         }
       }
     }
@@ -330,12 +357,13 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
 
   try {
     const maxTokens = await getMaxTokens();
+    const apiBaseUrl = await getApiBaseUrl();
     const body = prepareRequestBody(model, {
       messages: request.messages,
       temperature: 0.7,
       max_tokens: maxTokens,
       stream: true
-    });
+    }, apiBaseUrl);
 
     const endpoint = await getApiEndpoint('chat/completions');
     const response = await fetch(endpoint, {
@@ -348,8 +376,13 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      const errorMsg = error.error?.message || 'API request failed';
+      let errorMsg = `API request failed (${response.status}) - ${endpoint}`;
+      try {
+        const error = await response.json();
+        errorMsg = error.error?.message || errorMsg;
+      } catch (e) {
+        // Response body is not valid JSON (e.g. HTML error page)
+      }
       popupState.isStreaming = false;
 
       if (targetTabId) {
@@ -360,6 +393,7 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
       return;
     }
 
+    const ollama = isOllamaUrl(apiBaseUrl);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -373,31 +407,34 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            popupState.isStreaming = false;
-            if (targetTabId) {
-              chrome.tabs.sendMessage(targetTabId, { action: 'popupStreamEnd' });
-            } else {
-              chrome.runtime.sendMessage({ action: 'popupStreamEnd' });
-            }
-            return;
+        const chunk = parseStreamChunk(line, ollama);
+        if (chunk.error) {
+          popupState.isStreaming = false;
+          const msg = { action: 'popupStreamError', error: chunk.error };
+          if (targetTabId) {
+            chrome.tabs.sendMessage(targetTabId, msg);
+          } else {
+            chrome.runtime.sendMessage(msg);
           }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices[0]?.delta?.content;
-            if (content) {
-              popupState.content += content;
-              const msg = { action: 'popupStreamChunk', content: content };
-              if (targetTabId) {
-                chrome.tabs.sendMessage(targetTabId, msg);
-              } else {
-                chrome.runtime.sendMessage(msg);
-              }
-            }
-          } catch (e) {
-            console.warn('[Ask Web] Failed to parse streaming chunk:', data, e.message);
+          return;
+        }
+        if (chunk.done) {
+          popupState.isStreaming = false;
+          const msg = { action: 'popupStreamEnd' };
+          if (targetTabId) {
+            chrome.tabs.sendMessage(targetTabId, msg);
+          } else {
+            chrome.runtime.sendMessage(msg);
+          }
+          return;
+        }
+        if (chunk.content) {
+          popupState.content += chunk.content;
+          const msg = { action: 'popupStreamChunk', content: chunk.content };
+          if (targetTabId) {
+            chrome.tabs.sendMessage(targetTabId, msg);
+          } else {
+            chrome.runtime.sendMessage(msg);
           }
         }
       }
@@ -419,8 +456,36 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     }
   }
 }
+// Parse a streaming chunk and extract content, handling both OpenAI SSE and Ollama NDJSON formats
+function parseStreamChunk(line, isOllama) {
+  if (isOllama) {
+    const trimmed = line.trim();
+    if (!trimmed) return { content: null, done: false };
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.error) return { content: null, done: false, error: parsed.error };
+      if (parsed.done) return { content: parsed.message?.content || null, done: true };
+      return { content: parsed.message?.content || null, done: false };
+    } catch (e) {
+      console.warn('[Ask Web] Failed to parse Ollama streaming chunk:', trimmed, e.message);
+      return { content: null, done: false };
+    }
+  } else {
+    if (!line.startsWith('data: ')) return { content: null, done: false };
+    const data = line.slice(6);
+    if (data === '[DONE]') return { content: null, done: true };
+    try {
+      const parsed = JSON.parse(data);
+      return { content: parsed.choices?.[0]?.delta?.content || null, done: false };
+    } catch (e) {
+      console.warn('[Ask Web] Failed to parse streaming chunk:', data, e.message);
+      return { content: null, done: false };
+    }
+  }
+}
+
 // Helper to handle model-specific parameters (e.g., o1/o3 reasoning models)
-function prepareRequestBody(model, baseParams) {
+function prepareRequestBody(model, baseParams, apiBaseUrl = '') {
   // Check if it's a reasoning model (o1, o3, etc.)
   const isReasoningModel =
     model.startsWith('o1-') ||
@@ -437,6 +502,11 @@ function prepareRequestBody(model, baseParams) {
     }
     // Reasoning models usually don't support temperature
     delete body.temperature;
+  }
+
+  // Ollama native API: disable thinking explicitly
+  if (isOllamaUrl(apiBaseUrl)) {
+    body.think = false;
   }
 
   return body;
