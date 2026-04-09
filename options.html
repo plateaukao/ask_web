@@ -127,24 +127,6 @@
           <small>Choose whether to click the icon or just hover over it to trigger the action.</small>
         </div>
 
-        <div class="form-group">
-          <label for="selectionModel">Model for Selection Action</label>
-          <input type="text" id="selectionModel" list="selectionModelList" placeholder="Leave empty to use global default">
-          <datalist id="selectionModelList">
-            <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
-            <option value="gpt-5.2">GPT-5.2</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o Mini</option>
-          </datalist>
-          <small>Leave empty to use the global default model.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="selectionPrompt">Selection Action Prompt</label>
-          <textarea id="selectionPrompt" rows="4" placeholder="Enter prompt..."></textarea>
-          <small>Use <code>{{selection}}</code> for the selected text. Context before/after will be automatically
-            included in the system prompt.</small>
-        </div>
       </section>
 
       <!-- Max Tokens -->
@@ -215,12 +197,20 @@
               <small>Use <code>{{content}}</code> to insert the web content, <code>{{selection}}</code> for selected text</small>
             </div>
             <div class="form-group">
+              <label>Show in</label>
+              <div class="toggle-btn-group">
+                <button type="button" id="templateShowInPage" class="toggle-btn active">Whole Page</button>
+                <button type="button" id="templateShowInSelection" class="toggle-btn">Text Selection</button>
+              </div>
+              <small>Choose where this template appears. You can select both.</small>
+            </div>
+            <div class="form-group" id="includeTextContextGroup" style="display: none;">
               <label class="checkbox-label">
-                <input type="checkbox" id="templateShowInSelection">
+                <input type="checkbox" id="templateIncludeTextContext">
                 <span class="checkbox-custom"></span>
-                Show in text selection actions
+                Include surrounding text context
               </label>
-              <small>When enabled, this template appears as an option when you select text on a page.</small>
+              <small>When enabled, text before and after the selection is included to give the AI better context.</small>
             </div>
           </div>
           <div class="modal-footer">

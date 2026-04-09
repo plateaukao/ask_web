@@ -423,6 +423,44 @@ code {
   border: 1px solid rgba(60, 163, 116, 0.4);
 }
 
+/* Toggle button group */
+.toggle-btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+.toggle-btn {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.toggle-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.toggle-btn.active {
+  background: var(--accent-gradient);
+  color: #fff;
+  border-color: transparent;
+}
+
+.template-badge.page-badge {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+:root[data-theme="light"] .template-badge.page-badge {
+  background: transparent;
+  color: var(--accent-primary);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+}
+
 /* Drag handle */
 .drag-handle {
   display: flex;

@@ -18,7 +18,10 @@ const templateNameInput = document.getElementById('templateName');
 const templateModelSelect = document.getElementById('templateModel');
 const templateShortcutInput = document.getElementById('templateShortcut');
 const templatePromptInput = document.getElementById('templatePrompt');
-const templateShowInSelectionInput = document.getElementById('templateShowInSelection');
+const templateShowInPageBtn = document.getElementById('templateShowInPage');
+const templateShowInSelectionBtn = document.getElementById('templateShowInSelection');
+const templateIncludeTextContextInput = document.getElementById('templateIncludeTextContext');
+const includeTextContextGroup = document.getElementById('includeTextContextGroup');
 const saveTemplateBtn = document.getElementById('saveTemplate');
 const cancelTemplateBtn = document.getElementById('cancelTemplate');
 const closeModalBtn = document.getElementById('closeModal');
@@ -26,8 +29,6 @@ const statusEl = document.getElementById('status');
 
 // Selection Settings Elements
 const enableSelectionIconInput = document.getElementById('enableSelectionIcon');
-const selectionModelSelect = document.getElementById('selectionModel');
-const selectionPromptInput = document.getElementById('selectionPrompt');
 const maxTokensInput = document.getElementById('maxTokens');
 
 // Initialize
@@ -100,8 +101,6 @@ async function loadSettings() {
   // Load selection settings
   const selectionConfig = await getSelectionConfig();
   enableSelectionIconInput.checked = selectionConfig.enabled;
-  selectionModelSelect.value = selectionConfig.model;
-  selectionPromptInput.value = selectionConfig.prompt;
 
   // Load trigger mode
   const triggerMode = selectionConfig.triggerMode || 'click';
@@ -159,8 +158,13 @@ function setupEventListeners() {
     editingTemplateId = null;
     modalTitle.textContent = 'Add Template';
     templateNameInput.value = '';
+    templateModelSelect.value = '';
+    templateShortcutInput.value = '';
     templatePromptInput.value = '';
-    templateShowInSelectionInput.checked = false;
+    templateShowInPageBtn.classList.add('active');
+    templateShowInSelectionBtn.classList.remove('active');
+    templateIncludeTextContextInput.checked = false;
+    includeTextContextGroup.style.display = 'none';
     templateModal.classList.add('active');
   });
 
@@ -193,14 +197,13 @@ function setupEventListeners() {
     showStatus('Selection setting saved', 'success');
   });
 
-  selectionModelSelect.addEventListener('change', async () => {
-    await setSelectionConfig({ model: selectionModelSelect.value });
-    showStatus('Selection model saved', 'success');
+  // Toggle buttons for "Show in" (multi-select)
+  templateShowInPageBtn.addEventListener('click', () => {
+    templateShowInPageBtn.classList.toggle('active');
   });
-
-  selectionPromptInput.addEventListener('change', async () => {
-    await setSelectionConfig({ prompt: selectionPromptInput.value });
-    showStatus('Selection prompt saved', 'success');
+  templateShowInSelectionBtn.addEventListener('click', () => {
+    templateShowInSelectionBtn.classList.toggle('active');
+    includeTextContextGroup.style.display = templateShowInSelectionBtn.classList.contains('active') ? '' : 'none';
   });
 
   // Save trigger mode
@@ -240,6 +243,7 @@ function renderTemplates() {
         <div class="template-name">
           ${escapeHtml(template.name)}
           ${template.isDefault ? '<span class="template-badge">Built-in</span>' : ''}
+          ${template.showInPage !== false ? '<span class="template-badge page-badge">Page</span>' : ''}
           ${template.showInSelection ? '<span class="template-badge selection-badge">Selection</span>' : ''}
           ${template.shortcut ? `<span class="shortcut-badge">${escapeHtml(template.shortcut)}</span>` : ''}
         </div>
@@ -288,7 +292,19 @@ function editTemplate(id) {
   templateModelSelect.value = template.model || '';
   templateShortcutInput.value = template.shortcut || '';
   templatePromptInput.value = template.prompt;
-  templateShowInSelectionInput.checked = !!template.showInSelection;
+  // Set toggle button states (default showInPage to true for backward compat)
+  if (template.showInPage !== false) {
+    templateShowInPageBtn.classList.add('active');
+  } else {
+    templateShowInPageBtn.classList.remove('active');
+  }
+  if (template.showInSelection) {
+    templateShowInSelectionBtn.classList.add('active');
+  } else {
+    templateShowInSelectionBtn.classList.remove('active');
+  }
+  templateIncludeTextContextInput.checked = !!template.includeTextContext;
+  includeTextContextGroup.style.display = template.showInSelection ? '' : 'none';
   templateModal.classList.add('active');
 }
 
@@ -303,14 +319,18 @@ async function saveTemplate() {
     return;
   }
 
-  const showInSelection = templateShowInSelectionInput.checked;
+  const showInPage = templateShowInPageBtn.classList.contains('active');
+  const showInSelection = templateShowInSelectionBtn.classList.contains('active');
+  const includeTextContext = templateIncludeTextContextInput.checked;
 
   const templateData = {
     name,
     prompt,
     model: model || undefined,
     shortcut: shortcut || undefined,
-    showInSelection
+    showInPage,
+    showInSelection,
+    includeTextContext: showInSelection ? includeTextContext : undefined
   };
 
   if (editingTemplateId) {

@@ -9,8 +9,6 @@ var StorageKeys = StorageKeys || {
   FLOATING_SHORTCUT: 'floating_shortcut',
   CHAT_SHORTCUT: 'chat_shortcut',
   ENABLE_SELECTION_ICON: 'enable_selection_icon',
-  SELECTION_MODEL: 'selection_model',
-  SELECTION_PROMPT: 'selection_prompt',
   SELECTION_ICON_TRIGGER_MODE: 'selection_icon_trigger_mode',
   MAX_TOKENS: 'max_tokens'
 };
@@ -70,6 +68,15 @@ var DefaultTemplates = DefaultTemplates || [
     name: 'Key Points',
     prompt: 'Extract the key points from the following web content as a bullet list:\n\n{{content}}',
     isDefault: true
+  },
+  {
+    id: 'translate',
+    name: 'Translate',
+    prompt: 'Translate the selected text to English:\n\n{{content}}',
+    isDefault: true,
+    showInPage: false,
+    showInSelection: true,
+    includeTextContext: true
   }
 ];
 
@@ -170,15 +177,11 @@ async function setChatShortcut(shortcut) {
 async function getSelectionConfig() {
   const keys = [
     StorageKeys.ENABLE_SELECTION_ICON,
-    StorageKeys.SELECTION_MODEL,
-    StorageKeys.SELECTION_PROMPT,
     StorageKeys.SELECTION_ICON_TRIGGER_MODE
   ];
   const result = await getStorage(keys);
   return {
-    enabled: result[StorageKeys.ENABLE_SELECTION_ICON] !== false, // Default true? Or false. Let's default to false as it might be annoying. User said "toggle to enable", implies off by default? Or "toggle to enable" just means a toggle exists. Let's default to true for discoverability, or false for safety. I'll default to TRUE so the user sees the feature they asked for immediately.
-    model: result[StorageKeys.SELECTION_MODEL] || '',
-    prompt: result[StorageKeys.SELECTION_PROMPT] || 'Translate and explain the following text:\n\n{{selection}}',
+    enabled: result[StorageKeys.ENABLE_SELECTION_ICON] !== false,
     triggerMode: result[StorageKeys.SELECTION_ICON_TRIGGER_MODE] || 'click'
   };
 }
@@ -186,10 +189,14 @@ async function getSelectionConfig() {
 async function setSelectionConfig(config) {
   const data = {};
   if (config.enabled !== undefined) data[StorageKeys.ENABLE_SELECTION_ICON] = config.enabled;
-  if (config.model !== undefined) data[StorageKeys.SELECTION_MODEL] = config.model;
-  if (config.prompt !== undefined) data[StorageKeys.SELECTION_PROMPT] = config.prompt;
   if (config.triggerMode !== undefined) data[StorageKeys.SELECTION_ICON_TRIGGER_MODE] = config.triggerMode;
   await setStorage(data);
+}
+
+// Get the first template with showInSelection enabled (used as default selection action)
+async function getDefaultSelectionTemplate() {
+  const templates = await getTemplates();
+  return templates.find(t => t.showInSelection) || null;
 }
 
 // ─── Semantic content extraction ────────────────────────────────────────────

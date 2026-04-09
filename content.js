@@ -282,8 +282,9 @@ async function loadTemplates(root) {
   const container = root.getElementById('actionButtons');
   container.innerHTML = '';
 
-  // 1. Render Template Buttons
-  templates.forEach(t => {
+  // 1. Render Template Buttons (only show templates marked for whole page)
+  const pageTemplates = templates.filter(t => t.showInPage !== false);
+  pageTemplates.forEach(t => {
     const btn = document.createElement('button');
     btn.className = 'btn btn-secondary'; // Default to secondary style for templates
     btn.textContent = t.name;
@@ -1496,59 +1497,54 @@ async function createSelectionIcon() {
   const templates = await getTemplates();
   const selectionTemplates = templates.filter(t => t.showInSelection);
 
-  if (selectionTemplates.length > 0) {
-    // Add default action button first
-    const divider = document.createElement('div');
-    divider.className = 'divider';
-    actionMenu.appendChild(divider);
-
-    const defaultBtn = document.createElement('button');
-    defaultBtn.className = 'action-btn default-action';
-    defaultBtn.textContent = 'Default';
-    defaultBtn.addEventListener('mousedown', (e) => {
+  if (selectionTemplates.length === 1) {
+    // Single template — no menu, trigger directly via click or hover
+    const tmpl = selectionTemplates[0];
+    const triggerAction = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleSelectionIconClick();
-    });
-    actionMenu.appendChild(defaultBtn);
-
-    // Add each selection template as an action button
-    selectionTemplates.forEach(tmpl => {
+      handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model, includeTextContext: tmpl.includeTextContext });
+    };
+    if (triggerMode === 'hover') {
+      icon.addEventListener('mouseenter', triggerAction);
+    } else {
+      icon.addEventListener('mousedown', triggerAction);
+    }
+  } else if (selectionTemplates.length > 1) {
+    // Multiple templates — expand menu on hover, icon click triggers first
+    selectionTemplates.forEach((tmpl, index) => {
       const sep = document.createElement('div');
       sep.className = 'divider';
       actionMenu.appendChild(sep);
 
       const btn = document.createElement('button');
-      btn.className = 'action-btn';
+      btn.className = 'action-btn' + (index === 0 ? ' default-action' : '');
       btn.textContent = tmpl.name;
       btn.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model });
+        handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model, includeTextContext: tmpl.includeTextContext });
       });
       actionMenu.appendChild(btn);
     });
 
-    // Main icon click triggers default action (when no menu templates)
+    const firstTmpl = selectionTemplates[0];
     icon.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleSelectionIconClick();
+      handleSelectionIconClick({ prompt: firstTmpl.prompt, model: firstTmpl.model, includeTextContext: firstTmpl.includeTextContext });
     });
   } else {
-    // No selection templates — original behavior: icon triggers action directly
+    // No selection templates — trigger directly via click or hover
+    const triggerAction = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSelectionIconClick({});
+    };
     if (triggerMode === 'hover') {
-      icon.addEventListener('mouseenter', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSelectionIconClick();
-      });
+      icon.addEventListener('mouseenter', triggerAction);
     } else {
-      icon.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSelectionIconClick();
-      });
+      icon.addEventListener('mousedown', triggerAction);
     }
   }
 
@@ -1570,23 +1566,27 @@ async function handleSelectionIconClick(templateOverride) {
     currentStreamContent = '';
   }
 
-  const config = await getSelectionConfig();
   const selectionText = currentSelection.text;
+  const includeContext = templateOverride && templateOverride.includeTextContext !== false;
 
-  // Get Context
-  const context = getSelectionContext(currentSelection.range);
+  // Get context only if the template wants it
+  const context = includeContext ? getSelectionContext(currentSelection.range) : { before: '', after: '' };
   const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
 
-  // Use template override prompt/model if provided, otherwise use default selection config
-  let prompt = (templateOverride && templateOverride.prompt) ? templateOverride.prompt : config.prompt;
-  const model = (templateOverride && templateOverride.model) ? templateOverride.model : config.model;
+  let prompt = (templateOverride && templateOverride.prompt) ? templateOverride.prompt : '{{selection}}';
+  const model = (templateOverride && templateOverride.model) ? templateOverride.model : '';
 
-  const actionContext = buildSelectionContextForAction(selectionText, context);
-
-  prompt = prompt.replace(/{{selection}}/g, selectionText);
-  prompt = prompt.replace(/{{content}}/g, actionContext);
-
-  const finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
+  let finalPrompt;
+  if (includeContext) {
+    const actionContext = buildSelectionContextForAction(selectionText, context);
+    prompt = prompt.replace(/{{selection}}/g, selectionText);
+    prompt = prompt.replace(/{{content}}/g, actionContext);
+    finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
+  } else {
+    prompt = prompt.replace(/{{selection}}/g, selectionText);
+    prompt = prompt.replace(/{{content}}/g, selectionText);
+    finalPrompt = prompt;
+  }
 
   // Open Floating Window with half height for selection actions
   if (!isVisible) {
@@ -1665,24 +1665,37 @@ function buildSelectionHistoryMetadata(selectionText, context) {
 async function handleContextMenuSelection(selectionText) {
   if (!selectionText || selectionText.trim().length < 2) return;
 
+  // Use the first selection template (or a sensible fallback)
+  const tmpl = await getDefaultSelectionTemplate();
+  const tmplPrompt = tmpl ? tmpl.prompt : '{{selection}}';
+  const tmplModel = tmpl ? (tmpl.model || '') : '';
+  const includeContext = tmpl ? tmpl.includeTextContext !== false : true;
+
   // Try to capture the live selection range for surrounding context
   const selection = window.getSelection();
   let range = null;
   let context = { before: '', after: '' };
 
-  if (selection && selection.rangeCount > 0) {
+  if (includeContext && selection && selection.rangeCount > 0) {
     range = selection.getRangeAt(0).cloneRange();
     context = getSelectionContext(range);
+  } else if (selection && selection.rangeCount > 0) {
+    range = selection.getRangeAt(0).cloneRange();
   }
 
-  const config = await getSelectionConfig();
   const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
-  const actionContext = buildSelectionContextForAction(selectionText, context);
 
-  let prompt = config.prompt;
-  prompt = prompt.replace(/{{selection}}/g, selectionText);
-  prompt = prompt.replace(/{{content}}/g, actionContext);
-  const finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
+  let finalPrompt;
+  if (includeContext) {
+    const actionContext = buildSelectionContextForAction(selectionText, context);
+    let prompt = tmplPrompt.replace(/{{selection}}/g, selectionText);
+    prompt = prompt.replace(/{{content}}/g, actionContext);
+    finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
+  } else {
+    let prompt = tmplPrompt.replace(/{{selection}}/g, selectionText);
+    prompt = prompt.replace(/{{content}}/g, selectionText);
+    finalPrompt = prompt;
+  }
 
   if (!isVisible) {
     await toggleFloatingWindow(true, range);
@@ -1694,7 +1707,7 @@ async function handleContextMenuSelection(selectionText) {
     if (shadowRoot || waited > maxWait) {
       clearInterval(timer);
       if (shadowRoot) {
-        handleTemplateClick(shadowRoot, finalPrompt, config.model, historyMetadata);
+        handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata);
       }
     }
     waited++;
