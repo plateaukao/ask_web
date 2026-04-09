@@ -187,6 +187,10 @@
   align-items: center;
 }
 
+.controls-spacer {
+  width: 8px;
+}
+
 /* Action Buttons Area */
 .actions {
   display: flex;
