@@ -233,15 +233,9 @@ async function createFloatingWindow(options = {}) {
     // Load Templates
     await loadTemplates(shadowRoot);
 
-    // Load History (skip when an action will immediately stream new content)
-    if (!options.fromSelection && !options.skipHistory) {
+    // Load History (skip for selection actions — caller will stream new content)
+    if (!options.fromSelection) {
       await loadLatestContent(shadowRoot);
-    } else {
-      // Clear any leftover content so the window opens clean
-      const resultContent = shadowRoot.getElementById('resultContent');
-      const resultArea = shadowRoot.getElementById('resultArea');
-      if (resultContent) resultContent.innerHTML = '';
-      if (resultArea) resultArea.classList.add('hidden');
     }
 
 
@@ -324,6 +318,40 @@ async function loadTemplates(root) {
   if (isSelectionWindow) {
     chatBtn.style.display = 'none';
   }
+}
+
+// Shared helpers
+
+function clearResultArea(root) {
+  const resultContent = root.getElementById('resultContent');
+  const resultArea = root.getElementById('resultArea');
+  if (resultContent) resultContent.innerHTML = '';
+  if (resultArea) resultArea.classList.add('hidden');
+  currentStreamContent = '';
+}
+
+function buildSelectionPrompt(tmplPrompt, selectionText, context, includeContext) {
+  if (includeContext) {
+    const actionContext = buildSelectionContextForAction(selectionText, context);
+    let prompt = tmplPrompt.replace(/{{selection}}/g, selectionText);
+    prompt = prompt.replace(/{{content}}/g, actionContext);
+    return `Context: ${actionContext}\n\n${prompt}`;
+  }
+  let prompt = tmplPrompt.replace(/{{selection}}/g, selectionText);
+  prompt = prompt.replace(/{{content}}/g, selectionText);
+  return prompt;
+}
+
+function waitForShadowRoot(callback) {
+  const maxWait = 20;
+  let waited = 0;
+  const timer = setInterval(() => {
+    if (shadowRoot || waited > maxWait) {
+      clearInterval(timer);
+      if (shadowRoot) callback();
+    }
+    waited++;
+  }, 100);
 }
 
 // Logic for Template Clicks
@@ -476,36 +504,22 @@ async function registerShortcuts() {
 async function triggerTemplateAction(template) {
   // If window is already open, clear old content and run immediately
   if (isVisible && shadowRoot) {
-    const resultContent = shadowRoot.getElementById('resultContent');
-    const resultArea = shadowRoot.getElementById('resultArea');
-    const loading = shadowRoot.getElementById('loading');
-    if (resultContent) resultContent.innerHTML = '';
-    if (resultArea) resultArea.classList.add('hidden');
-    if (loading) loading.classList.remove('hidden');
+    clearResultArea(shadowRoot);
     handleTemplateClick(shadowRoot, template.prompt, template.model);
     return;
   }
 
-  await toggleFloatingWindow(false, null, true);
+  await toggleFloatingWindow();
 
   // If shadowRoot is ready (window existed but was hidden), run immediately
   if (shadowRoot) {
+    clearResultArea(shadowRoot);
     handleTemplateClick(shadowRoot, template.prompt, template.model);
     return;
   }
 
   // Wait for shadowRoot to be initialized (fresh window creation)
-  const maxWait = 20; // 2 seconds
-  let waited = 0;
-  const timer = setInterval(() => {
-    if (shadowRoot || waited > maxWait) {
-      clearInterval(timer);
-      if (shadowRoot) {
-        handleTemplateClick(shadowRoot, template.prompt, template.model);
-      }
-    }
-    waited++;
-  }, 100);
+  waitForShadowRoot(() => handleTemplateClick(shadowRoot, template.prompt, template.model));
 }
 
 async function handleChatClick(root) {
@@ -516,13 +530,13 @@ async function handleChatClick(root) {
   });
 }
 
-async function toggleFloatingWindow(fromSelection = false, selectionRange = null, skipHistory = false) {
+async function toggleFloatingWindow(fromSelection = false, selectionRange = null) {
   // If mini button is showing, hide it before toggling the main window
   if (miniFloatingBtn) miniFloatingBtn.style.display = 'none';
 
   if (!floatingWindow) {
     try {
-      const options = { fromSelection, selectionRange, skipHistory };
+      const options = { fromSelection, selectionRange };
       await createFloatingWindow(options);
       isVisible = true;
     } catch (e) {
@@ -578,12 +592,7 @@ async function toggleFloatingWindow(fromSelection = false, selectionRange = null
       // Update window type flag
       isSelectionWindow = true;
 
-      // Clear old content before showing
-      const resultContent = shadowRoot.getElementById('resultContent');
-      const resultArea = shadowRoot.getElementById('resultArea');
-      if (resultContent) resultContent.innerHTML = '';
-      if (resultArea) resultArea.classList.add('hidden');
-      currentStreamContent = '';
+      clearResultArea(shadowRoot);
 
       // Show the window if it was hidden
       if (!isVisible) {
@@ -603,16 +612,6 @@ async function toggleFloatingWindow(fromSelection = false, selectionRange = null
     } else {
       // Normal toggle (for Esc key, keyboard shortcuts, etc.)
       isVisible = !isVisible;
-
-      // Clear old content before showing if an action will stream new content
-      if (isVisible && skipHistory && shadowRoot) {
-        const resultContent = shadowRoot.getElementById('resultContent');
-        const resultArea = shadowRoot.getElementById('resultArea');
-        if (resultContent) resultContent.innerHTML = '';
-        if (resultArea) resultArea.classList.add('hidden');
-        currentStreamContent = '';
-      }
-
       floatingWindow.style.display = isVisible ? 'block' : 'none';
 
       if (isVisible) {
@@ -1433,7 +1432,7 @@ function hideSelectionIcon() {
 }
 
 async function createSelectionIcon() {
-  const config = await getSelectionConfig();
+  const [config, templates] = await Promise.all([getSelectionConfig(), getTemplates()]);
   const triggerMode = config.triggerMode || 'click';
 
   selectionIcon = document.createElement('div');
@@ -1532,8 +1531,6 @@ async function createSelectionIcon() {
   container.appendChild(icon);
   container.appendChild(actionMenu);
 
-  // Load templates with showInSelection
-  const templates = await getTemplates();
   const selectionTemplates = templates.filter(t => t.showInSelection);
 
   if (selectionTemplates.length === 1) {
@@ -1594,72 +1591,35 @@ async function createSelectionIcon() {
 }
 
 async function handleSelectionIconClick(templateOverride) {
-  hideSelectionIcon(); // Hide immediately for better UX
+  hideSelectionIcon();
 
-  // Clear previous result immediately so stale content isn't visible
-  if (shadowRoot) {
-    const resultContent = shadowRoot.getElementById('resultContent');
-    if (resultContent) resultContent.innerHTML = '';
-    const resultArea = shadowRoot.getElementById('resultArea');
-    if (resultArea) resultArea.classList.add('hidden');
-    currentStreamContent = '';
-  }
+  if (shadowRoot) clearResultArea(shadowRoot);
 
   const selectionText = currentSelection.text;
   const includeContext = templateOverride && templateOverride.includeTextContext !== false;
-
-  // Get context only if the template wants it
   const context = includeContext ? getSelectionContext(currentSelection.range) : { before: '', after: '' };
   const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
 
-  let prompt = (templateOverride && templateOverride.prompt) ? templateOverride.prompt : '{{selection}}';
+  const tmplPrompt = (templateOverride && templateOverride.prompt) ? templateOverride.prompt : '{{selection}}';
   const model = (templateOverride && templateOverride.model) ? templateOverride.model : '';
+  const finalPrompt = buildSelectionPrompt(tmplPrompt, selectionText, context, includeContext);
 
-  let finalPrompt;
-  if (includeContext) {
-    const actionContext = buildSelectionContextForAction(selectionText, context);
-    prompt = prompt.replace(/{{selection}}/g, selectionText);
-    prompt = prompt.replace(/{{content}}/g, actionContext);
-    finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
-  } else {
-    prompt = prompt.replace(/{{selection}}/g, selectionText);
-    prompt = prompt.replace(/{{content}}/g, selectionText);
-    finalPrompt = prompt;
-  }
-
-  // If window is already open, clear old content and show loading immediately
   if (isVisible && shadowRoot) {
-    const resultContent = shadowRoot.getElementById('resultContent');
-    const resultArea = shadowRoot.getElementById('resultArea');
-    const loading = shadowRoot.getElementById('loading');
-    if (resultContent) resultContent.innerHTML = '';
-    if (resultArea) resultArea.classList.add('hidden');
-    if (loading) loading.classList.remove('hidden');
     handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
     return;
   }
 
-  // Open Floating Window with half height for selection actions
   await toggleFloatingWindow(true, currentSelection.range);
 
-  // Wait for window to be ready
-  const maxWait = 20;
-  let waited = 0;
-  const timer = setInterval(() => {
-    if (shadowRoot || waited > maxWait) {
-      clearInterval(timer);
-      if (shadowRoot) {
-        handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
-      }
-    }
-    waited++;
-  }, 100);
+  if (shadowRoot) {
+    handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
+    return;
+  }
+
+  waitForShadowRoot(() => handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata));
 }
 
 function getSelectionContext(range, charCount = 300) {
-  // Simple context extraction
-  // We can use the range's containers
-
   let before = '';
   let after = '';
 
@@ -1714,53 +1674,37 @@ function buildSelectionHistoryMetadata(selectionText, context) {
 async function handleContextMenuSelection(selectionText) {
   if (!selectionText || selectionText.trim().length < 2) return;
 
-  // Use the first selection template (or a sensible fallback)
   const tmpl = await getDefaultSelectionTemplate();
   const tmplPrompt = tmpl ? tmpl.prompt : '{{selection}}';
   const tmplModel = tmpl ? (tmpl.model || '') : '';
   const includeContext = tmpl ? tmpl.includeTextContext !== false : true;
 
-  // Try to capture the live selection range for surrounding context
   const selection = window.getSelection();
   let range = null;
   let context = { before: '', after: '' };
 
-  if (includeContext && selection && selection.rangeCount > 0) {
+  if (selection && selection.rangeCount > 0) {
     range = selection.getRangeAt(0).cloneRange();
-    context = getSelectionContext(range);
-  } else if (selection && selection.rangeCount > 0) {
-    range = selection.getRangeAt(0).cloneRange();
+    if (includeContext) context = getSelectionContext(range);
   }
 
   const historyMetadata = buildSelectionHistoryMetadata(selectionText, context);
+  const finalPrompt = buildSelectionPrompt(tmplPrompt, selectionText, context, includeContext);
 
-  let finalPrompt;
-  if (includeContext) {
-    const actionContext = buildSelectionContextForAction(selectionText, context);
-    let prompt = tmplPrompt.replace(/{{selection}}/g, selectionText);
-    prompt = prompt.replace(/{{content}}/g, actionContext);
-    finalPrompt = `Context: ${actionContext}\n\n${prompt}`;
-  } else {
-    let prompt = tmplPrompt.replace(/{{selection}}/g, selectionText);
-    prompt = prompt.replace(/{{content}}/g, selectionText);
-    finalPrompt = prompt;
+  if (isVisible && shadowRoot) {
+    clearResultArea(shadowRoot);
+    handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata);
+    return;
   }
 
-  if (!isVisible) {
-    await toggleFloatingWindow(true, range);
+  await toggleFloatingWindow(true, range);
+
+  if (shadowRoot) {
+    handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata);
+    return;
   }
 
-  const maxWait = 20;
-  let waited = 0;
-  const timer = setInterval(() => {
-    if (shadowRoot || waited > maxWait) {
-      clearInterval(timer);
-      if (shadowRoot) {
-        handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata);
-      }
-    }
-    waited++;
-  }, 100);
+  waitForShadowRoot(() => handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata));
 }
 
 function buildSelectionContextForAction(selectionText, context) {
