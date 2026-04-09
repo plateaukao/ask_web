@@ -233,8 +233,16 @@ async function createFloatingWindow(options = {}) {
     // Load Templates
     await loadTemplates(shadowRoot);
 
-    // Load History
-    await loadLatestContent(shadowRoot);
+    // Load History (skip when an action will immediately stream new content)
+    if (!options.fromSelection && !options.skipHistory) {
+      await loadLatestContent(shadowRoot);
+    } else {
+      // Clear any leftover content so the window opens clean
+      const resultContent = shadowRoot.getElementById('resultContent');
+      const resultArea = shadowRoot.getElementById('resultArea');
+      if (resultContent) resultContent.innerHTML = '';
+      if (resultArea) resultArea.classList.add('hidden');
+    }
 
 
     // Behavior
@@ -466,11 +474,27 @@ async function registerShortcuts() {
 }
 
 async function triggerTemplateAction(template) {
-  if (!isVisible) {
-    await toggleFloatingWindow();
+  // If window is already open, clear old content and run immediately
+  if (isVisible && shadowRoot) {
+    const resultContent = shadowRoot.getElementById('resultContent');
+    const resultArea = shadowRoot.getElementById('resultArea');
+    const loading = shadowRoot.getElementById('loading');
+    if (resultContent) resultContent.innerHTML = '';
+    if (resultArea) resultArea.classList.add('hidden');
+    if (loading) loading.classList.remove('hidden');
+    handleTemplateClick(shadowRoot, template.prompt, template.model);
+    return;
   }
 
-  // Wait for shadowRoot to be initialized
+  await toggleFloatingWindow(false, null, true);
+
+  // If shadowRoot is ready (window existed but was hidden), run immediately
+  if (shadowRoot) {
+    handleTemplateClick(shadowRoot, template.prompt, template.model);
+    return;
+  }
+
+  // Wait for shadowRoot to be initialized (fresh window creation)
   const maxWait = 20; // 2 seconds
   let waited = 0;
   const timer = setInterval(() => {
@@ -492,13 +516,13 @@ async function handleChatClick(root) {
   });
 }
 
-async function toggleFloatingWindow(fromSelection = false, selectionRange = null) {
+async function toggleFloatingWindow(fromSelection = false, selectionRange = null, skipHistory = false) {
   // If mini button is showing, hide it before toggling the main window
   if (miniFloatingBtn) miniFloatingBtn.style.display = 'none';
 
   if (!floatingWindow) {
     try {
-      const options = { fromSelection, selectionRange };
+      const options = { fromSelection, selectionRange, skipHistory };
       await createFloatingWindow(options);
       isVisible = true;
     } catch (e) {
@@ -554,12 +578,17 @@ async function toggleFloatingWindow(fromSelection = false, selectionRange = null
       // Update window type flag
       isSelectionWindow = true;
 
+      // Clear old content before showing
+      const resultContent = shadowRoot.getElementById('resultContent');
+      const resultArea = shadowRoot.getElementById('resultArea');
+      if (resultContent) resultContent.innerHTML = '';
+      if (resultArea) resultArea.classList.add('hidden');
+      currentStreamContent = '';
+
       // Show the window if it was hidden
       if (!isVisible) {
         isVisible = true;
         floatingWindow.style.display = 'block';
-        // Reload latest content when showing
-        await loadLatestContent(shadowRoot);
       }
 
       // Update template buttons visibility
@@ -574,6 +603,16 @@ async function toggleFloatingWindow(fromSelection = false, selectionRange = null
     } else {
       // Normal toggle (for Esc key, keyboard shortcuts, etc.)
       isVisible = !isVisible;
+
+      // Clear old content before showing if an action will stream new content
+      if (isVisible && skipHistory && shadowRoot) {
+        const resultContent = shadowRoot.getElementById('resultContent');
+        const resultArea = shadowRoot.getElementById('resultArea');
+        if (resultContent) resultContent.innerHTML = '';
+        if (resultArea) resultArea.classList.add('hidden');
+        currentStreamContent = '';
+      }
+
       floatingWindow.style.display = isVisible ? 'block' : 'none';
 
       if (isVisible) {
@@ -1588,10 +1627,20 @@ async function handleSelectionIconClick(templateOverride) {
     finalPrompt = prompt;
   }
 
-  // Open Floating Window with half height for selection actions
-  if (!isVisible) {
-    await toggleFloatingWindow(true, currentSelection.range);
+  // If window is already open, clear old content and show loading immediately
+  if (isVisible && shadowRoot) {
+    const resultContent = shadowRoot.getElementById('resultContent');
+    const resultArea = shadowRoot.getElementById('resultArea');
+    const loading = shadowRoot.getElementById('loading');
+    if (resultContent) resultContent.innerHTML = '';
+    if (resultArea) resultArea.classList.add('hidden');
+    if (loading) loading.classList.remove('hidden');
+    handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
+    return;
   }
+
+  // Open Floating Window with half height for selection actions
+  await toggleFloatingWindow(true, currentSelection.range);
 
   // Wait for window to be ready
   const maxWait = 20;

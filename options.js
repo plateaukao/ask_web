@@ -360,6 +360,17 @@ async function saveTemplate() {
 async function deleteTemplate(id) {
   if (!confirm('Are you sure you want to delete this template?')) return;
 
+  // Track deleted built-in templates so they don't reappear
+  const tmpl = templates.find(t => t.id === id);
+  if (tmpl && tmpl.isDefault) {
+    const result = await getStorage([StorageKeys.DELETED_BUILTIN_TEMPLATES]);
+    const deletedIds = result[StorageKeys.DELETED_BUILTIN_TEMPLATES] || [];
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      await setStorage({ [StorageKeys.DELETED_BUILTIN_TEMPLATES]: deletedIds });
+    }
+  }
+
   templates = templates.filter(t => t.id !== id);
   await setTemplates(templates);
   renderTemplates();

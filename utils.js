@@ -10,7 +10,8 @@ var StorageKeys = StorageKeys || {
   CHAT_SHORTCUT: 'chat_shortcut',
   ENABLE_SELECTION_ICON: 'enable_selection_icon',
   SELECTION_ICON_TRIGGER_MODE: 'selection_icon_trigger_mode',
-  MAX_TOKENS: 'max_tokens'
+  MAX_TOKENS: 'max_tokens',
+  DELETED_BUILTIN_TEMPLATES: 'deleted_builtin_templates'
 };
 
 // These constants mirror shared.js — keep in sync.
@@ -138,8 +139,15 @@ async function setModel(model) {
 }
 
 async function getTemplates() {
-  const result = await getStorage([StorageKeys.TEMPLATES]);
-  return result[StorageKeys.TEMPLATES] || [...DefaultTemplates];
+  const result = await getStorage([StorageKeys.TEMPLATES, StorageKeys.DELETED_BUILTIN_TEMPLATES]);
+  const stored = result[StorageKeys.TEMPLATES];
+  const deletedIds = new Set(result[StorageKeys.DELETED_BUILTIN_TEMPLATES] || []);
+  if (!stored) return DefaultTemplates.filter(d => !deletedIds.has(d.id));
+
+  // Merge any missing built-in templates (skip user-deleted ones)
+  const storedIds = new Set(stored.map(t => t.id));
+  const missing = DefaultTemplates.filter(d => d.isDefault && !storedIds.has(d.id) && !deletedIds.has(d.id));
+  return missing.length > 0 ? [...stored, ...missing] : stored;
 }
 
 async function setTemplates(templates) {
