@@ -31,7 +31,24 @@ async function init() {
     if (markmap.Toolbar) {
       const toolbar = markmap.Toolbar.create(mm);
       toolbar.showBrand = false;
-      toolbar.setItems(['zoomIn', 'zoomOut', 'fit', 'recurse']);
+      toolbar.register({
+        id: 'copyPng',
+        title: 'Copy as PNG',
+        content: markmap.Toolbar.icon('M5 5V3H15V13H13M3 5H13V15H3Z', { stroke: 'currentColor', fill: 'none', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+        onClick: (e) => {
+          const button = e.target.closest('.mm-toolbar-item');
+          const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1e1e2e';
+          // Call clipboard.write synchronously to retain user activation;
+          // the PNG Blob resolves later via the Promise passed to ClipboardItem.
+          copySvgToClipboardAsPng(svg, bg)
+            .then(() => flashTitle(button, 'Copied!', 'Copy as PNG', 1200))
+            .catch((err) => {
+              console.error('Copy mind map failed', err);
+              flashTitle(button, 'Copy failed: ' + (err.message || err.name || 'unknown'), 'Copy as PNG', 4000);
+            });
+        },
+      });
+      toolbar.setItems(['zoomIn', 'zoomOut', 'fit', 'recurse', 'copyPng']);
       document.getElementById('svg-container').appendChild(toolbar.el);
     }
   } catch (err) {
@@ -39,6 +56,12 @@ async function init() {
     document.getElementById('error').textContent = 'Failed to render mind map: ' + err.message;
     document.getElementById('svg-container').style.display = 'none';
   }
+}
+
+function flashTitle(el, message, defaultTitle, ms) {
+  if (!el) return;
+  el.title = message;
+  setTimeout(() => { el.title = defaultTitle; }, ms);
 }
 
 init();

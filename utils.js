@@ -401,3 +401,99 @@ function processTemplate(template, content) {
 function generateId() {
   return 'tmpl_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 }
+
+// Replace every <foreignObject> in the SVG with a native <text> element using
+// the foreignObject's textContent. Chromium taints any canvas drawn from an
+// SVG image containing foreignObject (security boundary, not a bug), so the
+// only way to rasterize markmap output is to flatten foreignObjects first.
+// Trade-off: inline bold/italic/code formatting inside labels becomes plain text.
+function flattenSvgForeignObjects(svgEl, textColor) {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  const style = document.createElementNS(SVG_NS, 'style');
+  style.textContent = `
+    text.mm-flat {
+      font: 300 16px/20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      fill: ${textColor};
+    }
+  `;
+  svgEl.insertBefore(style, svgEl.firstChild);
+
+  const fos = Array.from(svgEl.querySelectorAll('foreignObject'));
+  for (const fo of fos) {
+    const x = parseFloat(fo.getAttribute('x') || '0');
+    const y = parseFloat(fo.getAttribute('y') || '0');
+    const inner = (fo.firstChild && fo.firstChild.firstChild) || fo;
+    const raw = inner.textContent || '';
+    const text = raw.replace(/\s+/g, ' ').trim();
+
+    if (!text) {
+      fo.remove();
+      continue;
+    }
+
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('class', 'mm-flat');
+    t.setAttribute('x', String(x));
+    t.setAttribute('y', String(y));
+    t.setAttribute('dominant-baseline', 'hanging');
+    t.textContent = text;
+    fo.replaceWith(t);
+  }
+}
+
+// Rasterize a live <svg> (with self-contained <style>, e.g. markmap output)
+// to a PNG Blob. Resolves with the Blob; rejects on load/encode failure.
+async function svgElementToPngBlob(svg, bgColor) {
+  const rect = svg.getBoundingClientRect();
+  const width = Math.ceil(rect.width) || Math.ceil(svg.clientWidth);
+  const height = Math.ceil(rect.height) || Math.ceil(svg.clientHeight);
+  if (!width || !height) throw new Error('SVG has no size yet');
+
+  // Resolve text color from the LIVE element (cloned node isn't in the document
+  // yet, so getComputedStyle on it returns nothing).
+  const textColor = getComputedStyle(svg).getPropertyValue('--markmap-text-color').trim() || '#333';
+
+  const clone = svg.cloneNode(true);
+  flattenSvgForeignObjects(clone, textColor);
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+  const svgStr = new XMLSerializer().serializeToString(clone);
+  const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('Image load failed (SVG may be malformed)'));
+    i.src = svgDataUrl;
+  });
+
+  const scale = Math.min(window.devicePixelRatio || 2, 3);
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (bgColor) {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.scale(scale, scale);
+  ctx.drawImage(img, 0, 0, width, height);
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob returned null')), 'image/png');
+  });
+}
+
+// Copy an SVG element to the clipboard as PNG. MUST be invoked from within a
+// user-gesture handler so the clipboard write has transient activation.
+// Returns a Promise that resolves once the write completes.
+async function copySvgToClipboardAsPng(svg, bgColor) {
+  if (typeof ClipboardItem === 'undefined') {
+    throw new Error('ClipboardItem not supported');
+  }
+  const blob = await svgElementToPngBlob(svg, bgColor);
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+}

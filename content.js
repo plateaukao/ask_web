@@ -1234,12 +1234,29 @@ function showMindmap(root) {
       const toolbar = markmap.Toolbar.create(mm);
       toolbar.showBrand = false;
       toolbar.register({
+        id: 'copyPng',
+        title: 'Copy as PNG',
+        content: markmap.Toolbar.icon('M5 5V3H15V13H13M3 5H13V15H3Z', { stroke: 'currentColor', fill: 'none', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+        onClick: (e) => {
+          const button = e.target.closest('.mm-toolbar-item');
+          const bg = getComputedStyle(floatingWindow).getPropertyValue('--bg-secondary').trim()
+            || getComputedStyle(floatingWindow).getPropertyValue('--bg').trim()
+            || (isDark ? '#1e1e2e' : '#f8f9fa');
+          copySvgToClipboardAsPng(mindmapSvg, bg)
+            .then(() => flashMindmapTitle(button, 'Copied!', 'Copy as PNG', 1200))
+            .catch((err) => {
+              console.error('Copy mind map failed', err);
+              flashMindmapTitle(button, 'Copy failed: ' + (err.message || err.name || 'unknown'), 'Copy as PNG', 4000);
+            });
+        },
+      });
+      toolbar.register({
         id: 'fullscreen',
         title: 'Open in new tab',
         content: markmap.Toolbar.icon('M3 3h6v2h-4v4h-2zM11 3h6v6h-2v-4h-4zM3 11h2v4h4v2h-6zM15 13h2v4h-6v-2h4z', { stroke: 'none', fill: 'currentColor' }),
         onClick: () => openMindmapTab(),
       });
-      toolbar.setItems(['zoomIn', 'zoomOut', 'fit', 'recurse', 'fullscreen']);
+      toolbar.setItems(['zoomIn', 'zoomOut', 'fit', 'recurse', 'copyPng', 'fullscreen']);
       mindmapContainer.appendChild(toolbar.el);
     }
   } catch (err) {
@@ -1256,6 +1273,12 @@ function hideMindmap(root) {
   mindmapContainer.classList.add('hidden');
   resultContent.classList.remove('hidden');
   copyActions.classList.remove('hidden');
+}
+
+function flashMindmapTitle(el, message, defaultTitle, ms) {
+  if (!el) return;
+  el.title = message;
+  setTimeout(() => { el.title = defaultTitle; }, ms);
 }
 
 async function openMindmapTab() {
