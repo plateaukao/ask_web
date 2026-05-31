@@ -19,6 +19,11 @@ const openSettingsBtn = document.getElementById('openSettings');
 const messagesContainer = document.getElementById('messagesContainer');
 const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
+const scrollToBottomBtn = document.getElementById('scrollToBottom');
+
+// When true, streaming output keeps the view pinned to the bottom.
+// Set to false when the user scrolls up to read earlier content.
+let autoScroll = true;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -148,6 +153,36 @@ function setupEventListeners() {
 
   // Send button
   sendBtn.addEventListener('click', sendMessage);
+
+  // Track whether the user has scrolled away from the bottom
+  messagesContainer.addEventListener('scroll', () => {
+    autoScroll = isNearBottom();
+    updateScrollButton();
+  });
+
+  // Jump back to the bottom and resume auto-scrolling
+  scrollToBottomBtn.addEventListener('click', () => {
+    autoScroll = true;
+    scrollToBottom();
+    updateScrollButton();
+  });
+}
+
+// Within a small threshold of the bottom of the messages container
+function isNearBottom() {
+  const threshold = 40;
+  return messagesContainer.scrollHeight - messagesContainer.scrollTop
+    - messagesContainer.clientHeight <= threshold;
+}
+
+function scrollToBottom() {
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Show the button only while loading and scrolled away from the bottom
+function updateScrollButton() {
+  const show = isLoading && !autoScroll;
+  scrollToBottomBtn.classList.toggle('visible', show);
 }
 
 // Listen for streaming responses from background
@@ -169,7 +204,11 @@ function handleStreamChunk(content) {
     const contentDiv = currentStreamElement.querySelector('.message-content');
     if (contentDiv) {
       contentDiv.innerHTML = renderMarkdown(currentStreamContent);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      if (autoScroll) {
+        scrollToBottom();
+      } else {
+        updateScrollButton();
+      }
     }
   }
 }
@@ -185,6 +224,7 @@ function handleStreamEnd() {
   currentStreamElement = null;
   isLoading = false;
   sendBtn.disabled = false;
+  updateScrollButton();
 }
 
 function handleStreamError(error) {
@@ -198,6 +238,7 @@ function handleStreamError(error) {
   currentStreamElement = null;
   isLoading = false;
   sendBtn.disabled = false;
+  updateScrollButton();
 }
 
 function setupQuickActions() {
@@ -240,6 +281,8 @@ async function sendMessage() {
   messageInput.style.height = 'auto';
   sendBtn.disabled = true;
   isLoading = true;
+  autoScroll = true;
+  updateScrollButton();
 
   // Build messages for API
   const systemMessage = buildSystemMessage();
