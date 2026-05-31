@@ -151,7 +151,7 @@ function extractContent() {
 function setupEventListeners() {
   // Settings button
   settingsBtn.addEventListener('click', () => {
-    chrome.runtime.openOptionsPage();
+    chrome.runtime.sendMessage({ action: 'openOptions' });
   });
 
   // Pop out button

@@ -130,7 +130,7 @@ function setupEventListeners() {
 
   // Open settings
   openSettingsBtn.addEventListener('click', () => {
-    chrome.runtime.openOptionsPage();
+    chrome.runtime.sendMessage({ action: 'openOptions' });
   });
 
   // Quick actions

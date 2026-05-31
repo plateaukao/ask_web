@@ -104,7 +104,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'openOptions') {
-    chrome.runtime.openOptionsPage();
+    // Use tabs.create rather than openOptionsPage(): on Arc (and other
+    // tab-archiving browsers) openOptionsPage tries to focus a previously
+    // opened options tab that has been archived/hidden, so nothing appears.
+    // Creating a fresh tab always shows a visible settings page.
+    chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
     return true;
   }
 
