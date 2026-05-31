@@ -28,11 +28,49 @@ let autoScroll = true;
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   await initTheme();
+  initMermaid();
   await loadSettings();
   await loadPageData();
   setupEventListeners();
   setupStreamListener();
 });
+
+// Configure Mermaid for on-demand rendering matching the current theme.
+// Dark is the default (no data-theme attribute); light sets data-theme="light".
+function initMermaid() {
+  if (typeof mermaid === 'undefined') return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: isLight ? 'default' : 'dark'
+  });
+}
+
+// Unique, DOM-id-safe suffix for each mermaid render call.
+let mermaidRenderSeq = 0;
+
+// Replace any ```mermaid code blocks in a message element with rendered SVG.
+// Called after a message is complete (never mid-stream, since a partial
+// diagram fails to parse). On parse failure the original code block is kept.
+async function renderMermaidBlocks(container) {
+  if (typeof mermaid === 'undefined' || !container) return;
+  const blocks = container.querySelectorAll('code.language-mermaid');
+  for (const code of blocks) {
+    const source = code.textContent;
+    const pre = code.closest('pre');
+    if (!pre) continue;
+    try {
+      const { svg } = await mermaid.render(`mermaid-${++mermaidRenderSeq}`, source);
+      const wrap = document.createElement('div');
+      wrap.className = 'mermaid-diagram';
+      wrap.innerHTML = svg;
+      pre.replaceWith(wrap);
+    } catch (e) {
+      // Leave the raw code block in place if the diagram can't be parsed.
+    }
+  }
+}
 
 async function loadSettings() {
   // Load model
@@ -219,6 +257,8 @@ function handleStreamEnd() {
   }
   if (currentStreamElement) {
     addCopyButton(currentStreamElement, currentStreamContent);
+    const contentDiv = currentStreamElement.querySelector('.message-content');
+    renderMermaidBlocks(contentDiv);
   }
   currentStreamContent = '';
   currentStreamElement = null;
@@ -303,7 +343,9 @@ async function sendMessage() {
 }
 
 function buildSystemMessage() {
-  let systemMessage = `You are a helpful assistant that answers questions about web content. Use markdown formatting for better readability (headers, lists, bold, code blocks, etc.). Be concise but thorough.`;
+  let systemMessage = `You are a helpful assistant that answers questions about web content. Use markdown formatting for better readability (headers, lists, bold, code blocks, etc.). Be concise but thorough.
+
+Whenever a diagram would explain something more clearly than prose — architecture, control or data flow, a sequence of events, a timeline, relationships, a decision tree, or a process — supplement your reply with a Mermaid diagram in a fenced \`\`\`mermaid code block. The diagram renders automatically. Keep diagrams focused, write a short sentence of prose alongside them, and use valid Mermaid syntax (flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, etc.). Only add a diagram when it genuinely aids understanding — skip it for simple factual answers.`;
 
   if (pageData && pageData.content) {
     const content = truncateContent(pageData.content, 8000);
@@ -335,6 +377,7 @@ function addMessage(role, content) {
 
   if (role === 'assistant') {
     addCopyButton(messageEl, content);
+    renderMermaidBlocks(messageEl.querySelector('.message-content'));
   }
 
   messagesContainer.appendChild(messageEl);

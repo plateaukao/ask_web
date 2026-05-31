@@ -496,6 +496,21 @@ body {
   padding: 0;
 }
 
+.message-content .mermaid-diagram {
+  margin: 12px 0;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  text-align: center;
+}
+
+.message-content .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .message-content h1,
 .message-content h2,
 .message-content h3,

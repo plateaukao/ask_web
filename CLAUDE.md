@@ -70,7 +70,7 @@ Dark is default. Light mode via `data-theme="light"` on `document.documentElemen
 
 ### Vendored Libraries (`vendor/`)
 
-D3, Markmap (lib, view, toolbar), and `marked.min.js` (root). These are injected as content scripts per `manifest.json`.
+D3, Markmap (lib, view, toolbar), and `marked.min.js` (root). These are injected as content scripts per `manifest.json`. `vendor/mermaid.min.js` (UMD build, exposes `globalThis.mermaid`) is loaded only by `chat.html` to render ` ```mermaid ` code blocks in chat replies into SVG.
 
 ## Git Conventions
 
