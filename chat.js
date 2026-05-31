@@ -50,26 +50,104 @@ function initMermaid() {
 // Unique, DOM-id-safe suffix for each mermaid render call.
 let mermaidRenderSeq = 0;
 
-// Replace any ```mermaid code blocks in a message element with rendered SVG.
-// Called after a message is complete (never mid-stream, since a partial
-// diagram fails to parse). On parse failure the original code block is kept.
-async function renderMermaidBlocks(container) {
+// Rendered diagram nodes for the CURRENT stream, keyed by diagram source.
+// Storing the live <div.mermaid-diagram> element (not an SVG string) lets us
+// move the same node back into place after each innerHTML reset instead of
+// rebuilding the SVG — which is what was causing the screen to blink. A null
+// value marks a source that failed to parse, so we don't retry it every chunk.
+// Reset per stream (see resetStreamMermaid) so nodes never jump between
+// messages.
+const mermaidNodeCache = new Map();
+
+// Sources currently being rendered, so overlapping stream chunks don't kick
+// off a duplicate render for the same diagram.
+const mermaidPending = new Set();
+
+// True while the diagram source for the open fence is still streaming in — we
+// hold the DOM steady (prefix + placeholder) and skip re-renders until it
+// closes, so a long script doesn't blink the screen token by token.
+let mermaidStreaming = false;
+
+function resetStreamMermaid() {
+  mermaidNodeCache.clear();
+  mermaidPending.clear();
+  mermaidStreaming = false;
+}
+
+// Count fully-closed ```mermaid blocks in the text so far. An open
+// (still-streaming) fence consumes the rest of the text and is not counted.
+function countCompleteMermaidBlocks(text) {
+  const matches = text.match(/```mermaid\s*\n[\s\S]*?\n```/g);
+  return matches ? matches.length : 0;
+}
+
+// True when the text ends inside an unclosed ```mermaid fence: strip every
+// complete block, and any ```mermaid left over must be an open one.
+function inOpenMermaidFence(text) {
+  return text.replace(/```mermaid\s*\n[\s\S]*?\n```/g, '').includes('```mermaid');
+}
+
+// Synchronously move already-rendered diagram nodes back into place after an
+// innerHTML reset, so finished diagrams never flash back to source. Reusing
+// the cached node (rather than re-parsing an SVG string) is what keeps the
+// screen stable. Only the first `completeCount` blocks are eligible.
+function applyCachedMermaid(container, completeCount) {
+  if (!container) return;
+  const blocks = container.querySelectorAll('code.language-mermaid');
+  for (let i = 0; i < blocks.length && i < completeCount; i++) {
+    const node = mermaidNodeCache.get(blocks[i].textContent);
+    if (node) {
+      const pre = blocks[i].closest('pre');
+      if (pre) pre.replaceWith(node);
+    }
+  }
+}
+
+// Render any completed-but-unrendered mermaid blocks, then re-apply to the
+// live container (which may have been re-rendered while we awaited). On parse
+// failure the source is cached as null and its code block kept.
+async function ensureMermaidRendered(container, completeCount) {
   if (typeof mermaid === 'undefined' || !container) return;
   const blocks = container.querySelectorAll('code.language-mermaid');
-  for (const code of blocks) {
-    const source = code.textContent;
-    const pre = code.closest('pre');
-    if (!pre) continue;
+  for (let i = 0; i < blocks.length && i < completeCount; i++) {
+    const source = blocks[i].textContent;
+    if (mermaidNodeCache.has(source) || mermaidPending.has(source)) continue;
+    mermaidPending.add(source);
     try {
       const { svg } = await mermaid.render(`mermaid-${++mermaidRenderSeq}`, source);
       const wrap = document.createElement('div');
       wrap.className = 'mermaid-diagram';
       wrap.innerHTML = svg;
-      pre.replaceWith(wrap);
+      mermaidNodeCache.set(source, wrap);
     } catch (e) {
-      // Leave the raw code block in place if the diagram can't be parsed.
+      mermaidNodeCache.set(source, null);
+    } finally {
+      mermaidPending.delete(source);
     }
+    applyCachedMermaid(container, completeCount);
   }
+}
+
+// Render the streamed text up to the open fence, then a placeholder for the
+// diagram whose source is still arriving. Called once when the fence opens;
+// the DOM then stays put until it closes.
+function renderStreamPrefixWithPlaceholder(contentDiv) {
+  const idx = currentStreamContent.lastIndexOf('```mermaid');
+  const prefix = idx >= 0 ? currentStreamContent.slice(0, idx) : currentStreamContent;
+  contentDiv.innerHTML = renderMarkdown(prefix) +
+    '<div class="mermaid-pending">Generating diagram…</div>';
+  const completeCount = countCompleteMermaidBlocks(prefix);
+  applyCachedMermaid(contentDiv, completeCount);
+  ensureMermaidRendered(contentDiv, completeCount);
+}
+
+// Render/refresh all completed diagrams in a container (full markdown already
+// in place). Used at stream end and for non-streamed messages.
+function renderMermaidBlocks(container) {
+  if (!container) return;
+  const completeCount = container.querySelectorAll('code.language-mermaid').length;
+  applyCachedMermaid(container, completeCount);
+  ensureMermaidRendered(container, completeCount);
 }
 
 async function loadSettings() {
@@ -238,16 +316,36 @@ function setupStreamListener() {
 
 function handleStreamChunk(content) {
   currentStreamContent += content;
-  if (currentStreamElement) {
-    const contentDiv = currentStreamElement.querySelector('.message-content');
-    if (contentDiv) {
-      contentDiv.innerHTML = renderMarkdown(currentStreamContent);
-      if (autoScroll) {
-        scrollToBottom();
-      } else {
-        updateScrollButton();
-      }
+  if (!currentStreamElement) return;
+  const contentDiv = currentStreamElement.querySelector('.message-content');
+  if (!contentDiv) return;
+
+  if (inOpenMermaidFence(currentStreamContent)) {
+    // The diagram's source is still streaming. Render the stable prefix plus a
+    // placeholder once, then leave the DOM untouched until the fence closes so
+    // the screen doesn't blink token by token while a long script arrives.
+    if (!mermaidStreaming) {
+      renderStreamPrefixWithPlaceholder(contentDiv);
+      mermaidStreaming = true;
+      scrollStream();
     }
+    return;
+  }
+
+  mermaidStreaming = false;
+  contentDiv.innerHTML = renderMarkdown(currentStreamContent);
+  // Render each diagram as soon as its fence closes, not at stream end.
+  const completeCount = countCompleteMermaidBlocks(currentStreamContent);
+  applyCachedMermaid(contentDiv, completeCount);
+  ensureMermaidRendered(contentDiv, completeCount);
+  scrollStream();
+}
+
+function scrollStream() {
+  if (autoScroll) {
+    scrollToBottom();
+  } else {
+    updateScrollButton();
   }
 }
 
@@ -258,8 +356,15 @@ function handleStreamEnd() {
   if (currentStreamElement) {
     addCopyButton(currentStreamElement, currentStreamContent);
     const contentDiv = currentStreamElement.querySelector('.message-content');
-    renderMermaidBlocks(contentDiv);
+    if (contentDiv) {
+      // Render the final text in full — the last chunk may have been held back
+      // as a placeholder (open fence), and this also catches a fence that
+      // closed on the very last chunk.
+      contentDiv.innerHTML = renderMarkdown(currentStreamContent);
+      renderMermaidBlocks(contentDiv);
+    }
   }
+  mermaidStreaming = false;
   currentStreamContent = '';
   currentStreamElement = null;
   isLoading = false;
@@ -333,6 +438,7 @@ async function sendMessage() {
 
   // Create assistant message placeholder for streaming
   currentStreamContent = '';
+  resetStreamMermaid();
   currentStreamElement = createStreamingMessage();
 
   // Start streaming request
@@ -377,11 +483,30 @@ function addMessage(role, content) {
 
   if (role === 'assistant') {
     addCopyButton(messageEl, content);
-    renderMermaidBlocks(messageEl.querySelector('.message-content'));
+    renderMermaidStatic(messageEl.querySelector('.message-content'));
   }
 
   messagesContainer.appendChild(messageEl);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// One-shot render for a finished, non-streamed message. Doesn't use the
+// per-stream node cache, so it can't move nodes out of streamed messages.
+async function renderMermaidStatic(container) {
+  if (typeof mermaid === 'undefined' || !container) return;
+  for (const code of container.querySelectorAll('code.language-mermaid')) {
+    const pre = code.closest('pre');
+    if (!pre) continue;
+    try {
+      const { svg } = await mermaid.render(`mermaid-${++mermaidRenderSeq}`, code.textContent);
+      const wrap = document.createElement('div');
+      wrap.className = 'mermaid-diagram';
+      wrap.innerHTML = svg;
+      pre.replaceWith(wrap);
+    } catch (e) {
+      // Leave the raw code block in place if the diagram can't be parsed.
+    }
+  }
 }
 
 function createStreamingMessage() {

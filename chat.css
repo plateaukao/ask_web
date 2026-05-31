@@ -511,6 +511,23 @@ body {
   height: auto;
 }
 
+.message-content .mermaid-pending {
+  margin: 12px 0;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  animation: mermaid-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes mermaid-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 .message-content h1,
 .message-content h2,
 .message-content h3,
