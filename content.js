@@ -12,6 +12,13 @@ function init() {
   window.hasAskWebListeners = true;
 
   console.log('[Ask Web] Content script loaded');
+
+  // Preserve single newlines as <br> so multi-line results (e.g. line-by-line
+  // translations) keep their original line breaks instead of being concatenated.
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+  }
+
   registerShortcuts(); // Initialize global shortcuts
   registerSelectionListener(); // Initialize selection listener
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
