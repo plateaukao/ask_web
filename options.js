@@ -2,20 +2,39 @@
 
 let templates = [];
 let editingTemplateId = null;
+let apiConfigs = [];
+let activeConfigId = '';
+let editingConfigId = null;
 
 // DOM Elements
-const apiKeyInput = document.getElementById('apiKey');
 const floatingShortcutInput = document.getElementById('floatingShortcut');
 const chatShortcutInput = document.getElementById('chatShortcut');
-const toggleKeyBtn = document.getElementById('toggleKey');
-const apiBaseUrlInput = document.getElementById('apiBaseUrl');
-const modelSelect = document.getElementById('model');
+const configList = document.getElementById('configList');
+const addConfigBtn = document.getElementById('addConfig');
+const configModal = document.getElementById('configModal');
+const configModalTitle = document.getElementById('configModalTitle');
+const configNameInput = document.getElementById('configName');
+const configBaseUrlInput = document.getElementById('configBaseUrl');
+const configApiKeyInput = document.getElementById('configApiKey');
+const toggleConfigKeyBtn = document.getElementById('toggleConfigKey');
+const configModelsInput = document.getElementById('configModels');
+const configDefaultModelSelect = document.getElementById('configDefaultModel');
+const configIsOllamaInput = document.getElementById('configIsOllama');
+const configReasoningGroup = document.getElementById('configReasoningGroup');
+const configReasoningSelect = document.getElementById('configReasoning');
+const configThinkingGroup = document.getElementById('configThinkingGroup');
+const configThinkingInput = document.getElementById('configThinking');
+const saveConfigBtn = document.getElementById('saveConfig');
+const cancelConfigBtn = document.getElementById('cancelConfig');
+const closeConfigModalBtn = document.getElementById('closeConfigModal');
 const templateList = document.getElementById('templateList');
 const addTemplateBtn = document.getElementById('addTemplate');
 const templateModal = document.getElementById('templateModal');
 const modalTitle = document.getElementById('modalTitle');
 const templateNameInput = document.getElementById('templateName');
+const templateConfigSelect = document.getElementById('templateConfig');
 const templateModelSelect = document.getElementById('templateModel');
+const templateModelList = document.getElementById('templateModelList');
 const templateShortcutInput = document.getElementById('templateShortcut');
 const templatePromptInput = document.getElementById('templatePrompt');
 const templateShowInPageBtn = document.getElementById('templateShowInPage');
@@ -70,10 +89,6 @@ function setupShortcutInput(inputElement, onSave) {
 }
 
 async function loadSettings() {
-  // Load API key
-  const apiKey = await getApiKey();
-  apiKeyInput.value = apiKey;
-
   // Load floating shortcut
   const floatingShortcut = await getFloatingShortcut();
   floatingShortcutInput.value = floatingShortcut;
@@ -82,12 +97,14 @@ async function loadSettings() {
   const chatShortcut = await getChatShortcut();
   chatShortcutInput.value = chatShortcut;
 
-  const apiBaseUrl = await getApiBaseUrl();
-  apiBaseUrlInput.value = apiBaseUrl;
-
-  // Load model
-  const model = await getModel();
-  modelSelect.value = model;
+  // Load API configurations (migrates legacy single-endpoint settings)
+  apiConfigs = await getApiConfigs();
+  activeConfigId = await getActiveApiConfigId();
+  if (!apiConfigs.some(c => c.id === activeConfigId)) {
+    activeConfigId = apiConfigs[0].id;
+    await setActiveApiConfigId(activeConfigId);
+  }
+  renderConfigs();
 
   // Load templates
   templates = await getTemplates();
@@ -120,11 +137,23 @@ function setupEventListeners() {
     });
   });
 
-  // Toggle API key visibility
-  toggleKeyBtn.addEventListener('click', () => {
-    const isPassword = apiKeyInput.type === 'password';
-    apiKeyInput.type = isPassword ? 'text' : 'password';
-    toggleKeyBtn.innerHTML = isPassword
+  // Add configuration button
+  addConfigBtn.addEventListener('click', () => openConfigModal(null));
+
+  // Config modal controls
+  closeConfigModalBtn.addEventListener('click', closeConfigModal);
+  cancelConfigBtn.addEventListener('click', closeConfigModal);
+  saveConfigBtn.addEventListener('click', saveConfig);
+
+  configModal.addEventListener('click', (e) => {
+    if (e.target === configModal) closeConfigModal();
+  });
+
+  // Toggle API key visibility (in config modal)
+  toggleConfigKeyBtn.addEventListener('click', () => {
+    const isPassword = configApiKeyInput.type === 'password';
+    configApiKeyInput.type = isPassword ? 'text' : 'password';
+    toggleConfigKeyBtn.innerHTML = isPassword
       ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
           <line x1="1" y1="1" x2="23" y2="23"/>
@@ -135,22 +164,18 @@ function setupEventListeners() {
         </svg>`;
   });
 
-  // Save API key on change
-  apiKeyInput.addEventListener('change', async () => {
-    await setApiKey(apiKeyInput.value);
-    showStatus('API key saved', 'success');
+  // Auto-detect Ollama when the base URL changes
+  configBaseUrlInput.addEventListener('input', () => {
+    configIsOllamaInput.checked = detectOllamaUrl(configBaseUrlInput.value);
+    updateConfigModalMode();
   });
 
-  // Save API base URL on change
-  apiBaseUrlInput.addEventListener('change', async () => {
-    await setApiBaseUrl(apiBaseUrlInput.value);
-    showStatus('API base URL saved', 'success');
-  });
+  // Manual Ollama override
+  configIsOllamaInput.addEventListener('change', updateConfigModalMode);
 
-  // Save model on change
-  modelSelect.addEventListener('change', async () => {
-    await setModel(modelSelect.value);
-    showStatus('Model saved', 'success');
+  // Keep the default-model select in sync with the models textarea
+  configModelsInput.addEventListener('input', () => {
+    populateDefaultModelSelect(parseModelLines(configModelsInput.value), configDefaultModelSelect.value);
   });
 
   // Add template button
@@ -158,6 +183,7 @@ function setupEventListeners() {
     editingTemplateId = null;
     modalTitle.textContent = 'Add Template';
     templateNameInput.value = '';
+    populateTemplateConfigSelect('');
     templateModelSelect.value = '';
     templateShortcutInput.value = '';
     templatePromptInput.value = '';
@@ -174,6 +200,11 @@ function setupEventListeners() {
 
   templateModal.addEventListener('click', (e) => {
     if (e.target === templateModal) closeModal();
+  });
+
+  // Repopulate the model suggestions when the template's config changes
+  templateConfigSelect.addEventListener('change', () => {
+    populateTemplateModelList(templateConfigSelect.value);
   });
 
   // Floating Shortcut Recording
@@ -229,6 +260,211 @@ function setupEventListeners() {
   saveTemplateBtn.addEventListener('click', saveTemplate);
 }
 
+// ─── API configuration management ────────────────────────────────────────
+
+function renderConfigs() {
+  configList.innerHTML = apiConfigs.map(config => `
+    <div class="template-item" data-id="${config.id}">
+      <div class="template-info">
+        <div class="template-name">
+          ${escapeHtml(config.name)}
+          ${config.id === activeConfigId ? '<span class="template-badge page-badge">Active</span>' : ''}
+          ${config.isOllama ? '<span class="template-badge selection-badge">Ollama</span>' : ''}
+        </div>
+        <div class="template-preview">
+          <span class="model-tag">${escapeHtml(config.model || '')}</span>
+          ${escapeHtml(config.apiBaseUrl)}
+          ${config.isOllama
+            ? ` • thinking ${config.thinking ? 'on' : 'off'}`
+            : (config.reasoningEffort && config.reasoningEffort !== 'none' ? ` • reasoning ${escapeHtml(config.reasoningEffort)}` : '')}
+        </div>
+      </div>
+      <div class="template-actions">
+        ${config.id !== activeConfigId ? `
+        <button class="btn-icon activate-config" data-id="${config.id}" title="Set as active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>` : ''}
+        <button class="btn-icon edit-config" data-id="${config.id}" title="Edit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        ${apiConfigs.length > 1 ? `
+        <button class="btn-icon btn-danger delete-config" data-id="${config.id}" title="Delete">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  configList.querySelectorAll('.activate-config').forEach(btn => {
+    btn.addEventListener('click', () => setActiveConfig(btn.dataset.id));
+  });
+  configList.querySelectorAll('.edit-config').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const config = apiConfigs.find(c => c.id === btn.dataset.id);
+      if (config) openConfigModal(config);
+    });
+  });
+  configList.querySelectorAll('.delete-config').forEach(btn => {
+    btn.addEventListener('click', () => deleteConfig(btn.dataset.id));
+  });
+}
+
+async function setActiveConfig(id) {
+  activeConfigId = id;
+  await setActiveApiConfigId(id);
+  renderConfigs();
+  showStatus('Active configuration changed', 'success');
+}
+
+function parseModelLines(text) {
+  return [...new Set(
+    text.split('\n').map(line => line.trim()).filter(Boolean)
+  )];
+}
+
+function populateDefaultModelSelect(models, selected) {
+  configDefaultModelSelect.innerHTML = models.map(m =>
+    `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`
+  ).join('');
+  if (models.includes(selected)) {
+    configDefaultModelSelect.value = selected;
+  }
+}
+
+// Show the reasoning-effort select for OpenAI-style endpoints and the
+// thinking on/off toggle for Ollama.
+function updateConfigModalMode() {
+  const isOllama = configIsOllamaInput.checked;
+  configReasoningGroup.style.display = isOllama ? 'none' : '';
+  configThinkingGroup.style.display = isOllama ? '' : 'none';
+}
+
+function openConfigModal(config) {
+  editingConfigId = config ? config.id : null;
+  configModalTitle.textContent = config ? 'Edit Configuration' : 'Add Configuration';
+  configNameInput.value = config ? config.name : '';
+  configBaseUrlInput.value = config ? config.apiBaseUrl : '';
+  configApiKeyInput.value = config ? config.apiKey : '';
+  configApiKeyInput.type = 'password';
+  const models = config ? config.models || [] : DefaultModels.map(m => m.id);
+  configModelsInput.value = models.join('\n');
+  populateDefaultModelSelect(models, config ? config.model : models[0]);
+  configIsOllamaInput.checked = config ? !!config.isOllama : false;
+  configReasoningSelect.value = config ? (config.reasoningEffort || 'none') : 'none';
+  configThinkingInput.checked = config ? !!config.thinking : false;
+  updateConfigModalMode();
+  configModal.classList.add('active');
+}
+
+function closeConfigModal() {
+  configModal.classList.remove('active');
+  editingConfigId = null;
+}
+
+async function saveConfig() {
+  const name = configNameInput.value.trim();
+  const apiBaseUrl = normalizeApiBaseUrl(configBaseUrlInput.value);
+  const models = parseModelLines(configModelsInput.value);
+
+  if (!name) {
+    showStatus('Please enter a configuration name', 'error');
+    return;
+  }
+  if (models.length === 0) {
+    showStatus('Please add at least one model', 'error');
+    return;
+  }
+
+  const model = models.includes(configDefaultModelSelect.value)
+    ? configDefaultModelSelect.value
+    : models[0];
+
+  const configData = {
+    name,
+    apiBaseUrl,
+    apiKey: configApiKeyInput.value.trim(),
+    models,
+    model,
+    isOllama: configIsOllamaInput.checked,
+    reasoningEffort: configReasoningSelect.value,
+    thinking: configThinkingInput.checked
+  };
+
+  if (editingConfigId) {
+    const index = apiConfigs.findIndex(c => c.id === editingConfigId);
+    if (index !== -1) {
+      apiConfigs[index] = { ...apiConfigs[index], ...configData };
+    }
+  } else {
+    apiConfigs.push({ id: generateConfigId(), ...configData });
+  }
+
+  await setApiConfigs(apiConfigs);
+  renderConfigs();
+  closeConfigModal();
+  showStatus('Configuration saved', 'success');
+}
+
+async function deleteConfig(id) {
+  if (apiConfigs.length <= 1) return;
+  if (!confirm('Are you sure you want to delete this configuration?')) return;
+
+  apiConfigs = apiConfigs.filter(c => c.id !== id);
+  await setApiConfigs(apiConfigs);
+
+  if (activeConfigId === id) {
+    activeConfigId = apiConfigs[0].id;
+    await setActiveApiConfigId(activeConfigId);
+  }
+
+  // Templates pointing at the deleted config fall back to the active one
+  let templatesChanged = false;
+  templates.forEach(t => {
+    if (t.configId === id) {
+      delete t.configId;
+      templatesChanged = true;
+    }
+  });
+  if (templatesChanged) {
+    await setTemplates(templates);
+    renderTemplates();
+  }
+
+  renderConfigs();
+  showStatus('Configuration deleted', 'success');
+}
+
+// ─── Template config/model pickers ───────────────────────────────────────
+
+function populateTemplateConfigSelect(selectedId) {
+  templateConfigSelect.innerHTML =
+    '<option value="">Default (active configuration)</option>' +
+    apiConfigs.map(c =>
+      `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`
+    ).join('');
+  templateConfigSelect.value = apiConfigs.some(c => c.id === selectedId) ? selectedId : '';
+  populateTemplateModelList(templateConfigSelect.value);
+}
+
+// Suggest models from the template's configuration (or the active one).
+function populateTemplateModelList(configId) {
+  const config = apiConfigs.find(c => c.id === configId)
+    || apiConfigs.find(c => c.id === activeConfigId)
+    || apiConfigs[0];
+  const models = (config && config.models) || [];
+  templateModelList.innerHTML = models.map(m =>
+    `<option value="${escapeHtml(m)}"></option>`
+  ).join('');
+}
+
 function renderTemplates() {
   templateList.innerHTML = templates.map(template => `
     <div class="template-item" draggable="true" data-id="${template.id}">
@@ -248,6 +484,7 @@ function renderTemplates() {
           ${template.shortcut ? `<span class="shortcut-badge">${escapeHtml(template.shortcut)}</span>` : ''}
         </div>
         <div class="template-preview">
+          ${template.configId ? `<span class="model-tag">${escapeHtml(configName(template.configId))}</span> ` : ''}
           ${template.model ? `<span class="model-tag">${escapeHtml(template.model)}</span> ` : ''}
           ${escapeHtml(template.prompt.substring(0, 60))}...
         </div>
@@ -282,6 +519,11 @@ function renderTemplates() {
   setupDragAndDrop();
 }
 
+function configName(configId) {
+  const config = apiConfigs.find(c => c.id === configId);
+  return config ? config.name : 'Unknown config';
+}
+
 function editTemplate(id) {
   const template = templates.find(t => t.id === id);
   if (!template) return;
@@ -289,6 +531,7 @@ function editTemplate(id) {
   editingTemplateId = id;
   modalTitle.textContent = 'Edit Template';
   templateNameInput.value = template.name;
+  populateTemplateConfigSelect(template.configId || '');
   templateModelSelect.value = template.model || '';
   templateShortcutInput.value = template.shortcut || '';
   templatePromptInput.value = template.prompt;
@@ -311,7 +554,8 @@ function editTemplate(id) {
 async function saveTemplate() {
   const name = templateNameInput.value.trim();
   const prompt = templatePromptInput.value.trim();
-  const model = templateModelSelect.value;
+  const configId = templateConfigSelect.value;
+  const model = templateModelSelect.value.trim();
   const shortcut = templateShortcutInput.value;
 
   if (!name || !prompt) {
@@ -326,6 +570,7 @@ async function saveTemplate() {
   const templateData = {
     name,
     prompt,
+    configId: configId || undefined,
     model: model || undefined,
     shortcut: shortcut || undefined,
     showInPage,

@@ -43,42 +43,6 @@
           <input type="text" id="chatShortcut" placeholder="Click to record (e.g. Alt+C)" readonly>
           <small>Global shortcut to open chat with the current page content.</small>
         </div>
-      </section>
-
-      <!-- API Configuration -->
-      <section class="card">
-        <h2>API Configuration</h2>
-
-        <div class="form-group">
-          <label for="apiKey">OpenAI API Key</label>
-          <div class="input-with-button">
-            <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
-            <button type="button" id="toggleKey" class="btn-icon" title="Show/Hide">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </button>
-          </div>
-          <small>Your API key is stored locally and never sent anywhere except OpenAI</small>
-        </div>
-
-        <div class="form-group">
-          <label for="apiBaseUrl">API Base URL</label>
-          <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1" autocomplete="off">
-          <small>Point to any compatible OpenAI-style endpoint (ending with /v1). Leave empty for the default.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="model">Model</label>
-          <input type="text" id="model" list="modelList" placeholder="Enter or select a model">
-          <datalist id="modelList">
-            <option value="gpt-5.2-pro">GPT-5.2 Pro (Latest)</option>
-            <option value="gpt-5.2">GPT-5.1</option>
-            <option value="gpt-4.1">GPT-4.1</option>
-          </datalist>
-          <small>Select from the list or type any model name (e.g., gpt-5.2-pro, o1-preview)</small>
-        </div>
 
         <div class="form-group">
           <label>Theme</label>
@@ -95,6 +59,26 @@
             </label>
           </div>
         </div>
+      </section>
+
+      <!-- API Configurations -->
+      <section class="card">
+        <div class="section-header">
+          <h2>API Configurations</h2>
+          <button id="addConfig" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Configuration
+          </button>
+        </div>
+
+        <div id="configList" class="template-list">
+          <!-- API configurations will be inserted here -->
+        </div>
+        <small>Each configuration bundles an endpoint, API key, and its own models. The active one is used by
+          default; prompt templates can pick a different one.</small>
       </section>
 
       <!-- Text Selection Actions -->
@@ -158,6 +142,89 @@
         </div>
       </section>
 
+      <!-- API Configuration Editor Modal -->
+      <div id="configModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="configModalTitle">Add Configuration</h3>
+            <button id="closeConfigModal" class="btn-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="configName">Name</label>
+              <input type="text" id="configName" placeholder="e.g. OpenAI, Local Ollama">
+            </div>
+            <div class="form-group">
+              <label for="configBaseUrl">API Base URL</label>
+              <input type="text" id="configBaseUrl" placeholder="https://api.openai.com/v1" autocomplete="off">
+              <small>OpenAI official, or any OpenAI-compatible endpoint — e.g.
+                <code>http://localhost:11434/v1</code> for Ollama. Leave empty for the OpenAI default.</small>
+            </div>
+            <div class="form-group">
+              <label for="configApiKey">API Key</label>
+              <div class="input-with-button">
+                <input type="password" id="configApiKey" placeholder="sk-..." autocomplete="off">
+                <button type="button" id="toggleConfigKey" class="btn-icon" title="Show/Hide">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </div>
+              <small>Stored locally, only sent to this endpoint. Optional for local servers like Ollama.</small>
+            </div>
+            <div class="form-group">
+              <label for="configModels">Models</label>
+              <textarea id="configModels" rows="4" placeholder="gpt-5.2-pro&#10;gpt-4.1"></textarea>
+              <small>One model name per line. These appear in the model dropdowns.</small>
+            </div>
+            <div class="form-group">
+              <label for="configDefaultModel">Default Model</label>
+              <select id="configDefaultModel"></select>
+              <small>Used when a template doesn't override the model.</small>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="configIsOllama">
+                <span class="checkbox-custom"></span>
+                This is an Ollama server
+              </label>
+              <small>Auto-detected from the URL. Ollama uses its native API and a simple thinking on/off
+                switch instead of reasoning effort levels.</small>
+            </div>
+            <div class="form-group" id="configReasoningGroup">
+              <label for="configReasoning">Reasoning Effort</label>
+              <select id="configReasoning">
+                <option value="none">None (model default)</option>
+                <option value="minimal">Minimal</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+              <small>How much the model should think before answering. Applies to reasoning models;
+                "None" sends no reasoning parameter.</small>
+            </div>
+            <div class="form-group" id="configThinkingGroup" style="display: none;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="configThinking">
+                <span class="checkbox-custom"></span>
+                Enable thinking
+              </label>
+              <small>Let the Ollama model think before answering. Off gives faster replies.</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="cancelConfig" class="btn btn-secondary">Cancel</button>
+            <button id="saveConfig" class="btn btn-primary">Save Configuration</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Template Editor Modal -->
       <div id="templateModal" class="modal">
         <div class="modal-content">
@@ -176,14 +243,17 @@
               <input type="text" id="templateName" placeholder="My Custom Template">
             </div>
             <div class="form-group">
+              <label for="templateConfig">API Configuration (Optional)</label>
+              <select id="templateConfig">
+                <option value="">Default (active configuration)</option>
+              </select>
+              <small>Which API configuration set this template uses.</small>
+            </div>
+            <div class="form-group">
               <label for="templateModel">Model Overlay (Optional)</label>
-              <input type="text" id="templateModel" list="templateModelList" placeholder="Leave empty to use global default">
-              <datalist id="templateModelList">
-                <option value="gpt-5.2-pro">GPT-5.2 Pro</option>
-                <option value="gpt-5.1">GPT-5.1</option>
-                <option value="gpt-4.1">GPT-4.1</option>
-              </datalist>
-              <small>Leave empty to use the global default model.</small>
+              <input type="text" id="templateModel" list="templateModelList" placeholder="Leave empty to use the configuration's default">
+              <datalist id="templateModelList"></datalist>
+              <small>Leave empty to use the selected configuration's default model.</small>
             </div>
             <div class="form-group">
               <label for="templateShortcut">Keyboard Shortcut (Optional)</label>

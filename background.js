@@ -1,10 +1,11 @@
 // Background service worker for API calls
 import {
-  DEFAULT_API_BASE_URL,
   DEFAULT_MAX_TOKENS,
   DEFAULT_MODEL,
   STORAGE_KEYS,
-  normalizeApiBaseUrl
+  normalizeApiBaseUrl,
+  isOfficialOpenAiUrl,
+  migrateLegacyApiConfig
 } from './shared.js';
 
 // Get storage value helper
@@ -21,20 +22,56 @@ async function getMaxTokens() {
   return val > 0 ? val : DEFAULT_MAX_TOKENS;
 }
 
-async function getApiBaseUrl() {
-  const stored = await getStorageValue(STORAGE_KEYS.API_BASE_URL);
-  return normalizeApiBaseUrl(stored);
+// ─── API configuration sets ──────────────────────────────────────────────
+// Mirrors the config helpers in utils.js — keep in sync.
+
+async function getApiConfigs() {
+  let configs = await getStorageValue(STORAGE_KEYS.API_CONFIGS);
+  if (!Array.isArray(configs) || configs.length === 0) {
+    const legacy = await new Promise((resolve) => {
+      chrome.storage.local.get(
+        [STORAGE_KEYS.API_KEY, STORAGE_KEYS.API_BASE_URL, STORAGE_KEYS.MODEL],
+        resolve
+      );
+    });
+    configs = [migrateLegacyApiConfig(legacy)];
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.API_CONFIGS]: configs,
+      [STORAGE_KEYS.ACTIVE_API_CONFIG]: configs[0].id
+    });
+  }
+  return configs;
 }
 
-function isOllamaUrl(url) {
-  return /localhost|127\.0\.0\.1/.test(url) && url.includes('11434');
+// Resolve a config by id, falling back to the active config, then the first.
+async function resolveApiConfig(configId) {
+  const configs = await getApiConfigs();
+  const activeId = await getStorageValue(STORAGE_KEYS.ACTIVE_API_CONFIG);
+  return configs.find(c => c.id === configId)
+    || configs.find(c => c.id === activeId)
+    || configs[0];
 }
 
-async function getApiEndpoint(path = '') {
-  const base = await getApiBaseUrl();
+// Only the official OpenAI endpoint hard-requires a key; local/self-hosted
+// servers (especially Ollama) commonly run without one.
+function missingApiKeyError(config) {
+  if (!config.apiKey && isOfficialOpenAiUrl(config.apiBaseUrl)) {
+    return `Please set the API key for "${config.name}" in the extension settings`;
+  }
+  return null;
+}
+
+function buildHeaders(config) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+  return headers;
+}
+
+function apiEndpointFor(config, path = '') {
+  const base = normalizeApiBaseUrl(config.apiBaseUrl);
   if (!path) return base;
   // For Ollama, use native /api/chat instead of /v1/chat/completions
-  if (isOllamaUrl(base) && path === 'chat/completions') {
+  if (config.isOllama && path === 'chat/completions') {
     const origin = base.replace(/\/v1\/?$/, '');
     return `${origin}/api/chat`;
   }
@@ -144,12 +181,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleSummarize(request) {
-  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
-  if (!apiKey) {
-    throw new Error('Please set your OpenAI API key in the extension settings');
+  const config = await resolveApiConfig(request.configId);
+  const keyError = missingApiKeyError(config);
+  if (keyError) {
+    throw new Error(keyError);
   }
 
-  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
+  const model = request.model || config.model || DEFAULT_MODEL;
 
   const messages = [
     {
@@ -163,22 +201,18 @@ async function handleSummarize(request) {
   ];
 
   const maxTokens = await getMaxTokens();
-  const apiBaseUrl = await getApiBaseUrl();
   // For popup, we'll do non-streaming for simplicity but can be changed
   const body = prepareRequestBody(model, {
     messages: messages,
     temperature: 0.7,
     max_tokens: maxTokens,
     stream: false
-  }, apiBaseUrl);
+  }, config);
 
-  const endpoint = await getApiEndpoint('chat/completions');
+  const endpoint = apiEndpointFor(config, 'chat/completions');
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
+    headers: buildHeaders(config),
     body: JSON.stringify(body)
   });
 
@@ -200,29 +234,26 @@ async function handleSummarize(request) {
 }
 
 async function handleChat(request) {
-  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
-  if (!apiKey) {
-    throw new Error('Please set your OpenAI API key in the extension settings');
+  const config = await resolveApiConfig(request.configId);
+  const keyError = missingApiKeyError(config);
+  if (keyError) {
+    throw new Error(keyError);
   }
 
-  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
+  const model = request.model || config.model || DEFAULT_MODEL;
 
   const maxTokens = await getMaxTokens();
-  const apiBaseUrl = await getApiBaseUrl();
   const body = prepareRequestBody(model, {
     messages: request.messages,
     temperature: 0.7,
     max_tokens: maxTokens,
     stream: false
-  }, apiBaseUrl);
+  }, config);
 
-  const endpoint = await getApiEndpoint('chat/completions');
+  const endpoint = apiEndpointFor(config, 'chat/completions');
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
+    headers: buildHeaders(config),
     body: JSON.stringify(body)
   });
 
@@ -244,34 +275,31 @@ async function handleChat(request) {
 
 // Streaming handler for chat page
 async function handleStreamRequest(request, sender) {
-  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
-  if (!apiKey) {
+  const config = await resolveApiConfig(request.configId);
+  const keyError = missingApiKeyError(config);
+  if (keyError) {
     chrome.tabs.sendMessage(sender.tab.id, {
       action: 'streamError',
-      error: 'Please set your OpenAI API key in the extension settings'
+      error: keyError
     });
     return;
   }
 
-  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
+  const model = request.model || config.model || DEFAULT_MODEL;
 
   try {
     const maxTokens = await getMaxTokens();
-    const apiBaseUrl = await getApiBaseUrl();
     const body = prepareRequestBody(model, {
       messages: request.messages,
       temperature: 0.7,
       max_tokens: maxTokens,
       stream: true
-    }, apiBaseUrl);
+    }, config);
 
-    const endpoint = await getApiEndpoint('chat/completions');
+    const endpoint = apiEndpointFor(config, 'chat/completions');
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: buildHeaders(config),
       body: JSON.stringify(body)
     });
 
@@ -290,7 +318,7 @@ async function handleStreamRequest(request, sender) {
       return;
     }
 
-    const ollama = isOllamaUrl(apiBaseUrl);
+    const ollama = !!config.isOllama;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -330,18 +358,18 @@ async function handleStreamRequest(request, sender) {
 
 // Streaming handler for popup
 async function handlePopupStreamRequest(request, sender) { // Added sender
-  const apiKey = await getStorageValue(STORAGE_KEYS.API_KEY);
-  if (!apiKey) {
-    const errorMsg = 'Please set your OpenAI API key in the extension settings';
+  const config = await resolveApiConfig(request.configId);
+  const keyError = missingApiKeyError(config);
+  if (keyError) {
     if (sender?.tab?.id) {
       chrome.tabs.sendMessage(sender.tab.id, {
         action: 'popupStreamError',
-        error: errorMsg
+        error: keyError
       });
     } else {
       chrome.runtime.sendMessage({
         action: 'popupStreamError',
-        error: errorMsg
+        error: keyError
       });
     }
     return;
@@ -357,25 +385,21 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
     tabId: targetTabId || null
   };
 
-  const model = request.model || await getStorageValue(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
+  const model = request.model || config.model || DEFAULT_MODEL;
 
   try {
     const maxTokens = await getMaxTokens();
-    const apiBaseUrl = await getApiBaseUrl();
     const body = prepareRequestBody(model, {
       messages: request.messages,
       temperature: 0.7,
       max_tokens: maxTokens,
       stream: true
-    }, apiBaseUrl);
+    }, config);
 
-    const endpoint = await getApiEndpoint('chat/completions');
+    const endpoint = apiEndpointFor(config, 'chat/completions');
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: buildHeaders(config),
       body: JSON.stringify(body)
     });
 
@@ -397,7 +421,7 @@ async function handlePopupStreamRequest(request, sender) { // Added sender
       return;
     }
 
-    const ollama = isOllamaUrl(apiBaseUrl);
+    const ollama = !!config.isOllama;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -489,7 +513,7 @@ function parseStreamChunk(line, isOllama) {
 }
 
 // Helper to handle model-specific parameters (e.g., o1/o3 reasoning models)
-function prepareRequestBody(model, baseParams, apiBaseUrl = '') {
+function prepareRequestBody(model, baseParams, config) {
   // Check if it's a reasoning model (o1, o3, etc.)
   const isReasoningModel =
     model.startsWith('o1-') ||
@@ -508,9 +532,19 @@ function prepareRequestBody(model, baseParams, apiBaseUrl = '') {
     delete body.temperature;
   }
 
-  // Ollama native API: disable thinking explicitly
-  if (isOllamaUrl(apiBaseUrl)) {
-    body.think = false;
+  if (config.isOllama) {
+    // Ollama native API: thinking is a simple on/off toggle
+    body.think = !!config.thinking;
+  } else {
+    // OpenAI-style endpoints: per-config reasoning effort ('none' = don't
+    // send the parameter). The official OpenAI API rejects reasoning_effort
+    // on non-reasoning models, so only attach it there when the model
+    // supports it; other OpenAI-compatible servers ignore unknown fields.
+    const effort = config.reasoningEffort;
+    if (effort && effort !== 'none' &&
+        (!isOfficialOpenAiUrl(config.apiBaseUrl) || isReasoningModel)) {
+      body.reasoning_effort = effort;
+    }
   }
 
   return body;

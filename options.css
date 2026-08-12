@@ -507,6 +507,9 @@ code {
 .modal-content {
   width: 100%;
   max-width: 500px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -532,6 +535,7 @@ code {
   align-items: center;
   padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -541,6 +545,9 @@ code {
 
 .modal-body {
   padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .modal-footer {
@@ -549,6 +556,7 @@ code {
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 /* Status */

@@ -3,6 +3,9 @@ var StorageKeys = StorageKeys || {
   API_KEY: 'openai_api_key',
   MODEL: 'openai_model',
   API_BASE_URL: 'openai_api_base_url',
+  API_CONFIGS: 'api_configs',
+  ACTIVE_API_CONFIG: 'active_api_config_id',
+  CHAT_MODEL_SELECTION: 'chat_model_selection',
   TEMPLATES: 'prompt_templates',
   DEFAULT_TEMPLATE: 'default_template',
   THEME: 'theme',
@@ -94,29 +97,99 @@ async function setStorage(data) {
   });
 }
 
-async function getApiKey() {
-  const result = await getStorage([StorageKeys.API_KEY]);
-  return result[StorageKeys.API_KEY] || '';
-}
-
-async function setApiKey(key) {
-  await setStorage({ [StorageKeys.API_KEY]: key });
-}
-
-async function getApiBaseUrl() {
-  const result = await getStorage([StorageKeys.API_BASE_URL]);
-  return normalizeApiBaseUrl(result[StorageKeys.API_BASE_URL]);
-}
-
-async function setApiBaseUrl(url) {
-  await setStorage({ [StorageKeys.API_BASE_URL]: normalizeApiBaseUrl(url) });
-}
-
 // Mirrors shared.js normalizeApiBaseUrl — keep in sync
 function normalizeApiBaseUrl(url) {
   const trimmed = (url || '').trim();
   const base = trimmed || DEFAULT_API_BASE_URL;
   return base.replace(/\/+$/, '');
+}
+
+// ─── API configuration sets ─────────────────────────────────────────────────
+// An API config bundles endpoint + key + models + reasoning behavior:
+//   { id, name, apiBaseUrl, apiKey, models: [..], model, isOllama,
+//     reasoningEffort: 'none'|'minimal'|'low'|'medium'|'high', thinking: bool }
+// Ollama configs use `thinking` (native think on/off); everything else uses
+// `reasoningEffort` ('none' = don't send the parameter).
+
+// Mirrors shared.js detectOllamaUrl — keep in sync
+function detectOllamaUrl(url) {
+  const u = (url || '').toLowerCase();
+  return u.includes('11434') || /(^|[.\/-])ollama([.:\/-]|$)/.test(u);
+}
+
+// Mirrors shared.js isOfficialOpenAiUrl — keep in sync
+function isOfficialOpenAiUrl(url) {
+  try {
+    return new URL(url || DEFAULT_API_BASE_URL).hostname === 'api.openai.com';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Mirrors shared.js migrateLegacyApiConfig — keep in sync
+function migrateLegacyApiConfig(legacy) {
+  const apiBaseUrl = normalizeApiBaseUrl(legacy[StorageKeys.API_BASE_URL]);
+  const isOllama = detectOllamaUrl(apiBaseUrl);
+  const official = isOfficialOpenAiUrl(apiBaseUrl);
+  const model = (legacy[StorageKeys.MODEL] || '').trim() || DEFAULT_MODEL;
+  return {
+    id: 'cfg_default',
+    name: isOllama ? 'Ollama' : (official ? 'OpenAI' : 'Custom'),
+    apiBaseUrl,
+    apiKey: legacy[StorageKeys.API_KEY] || '',
+    models: official ? [...new Set([model, ...DefaultModels.map(m => m.id)])] : [model],
+    model,
+    isOllama,
+    reasoningEffort: official || isOllama ? 'none' : 'low',
+    thinking: false
+  };
+}
+
+async function getApiConfigs() {
+  const result = await getStorage([StorageKeys.API_CONFIGS]);
+  let configs = result[StorageKeys.API_CONFIGS];
+  if (!Array.isArray(configs) || configs.length === 0) {
+    // First run after the multi-config upgrade: migrate legacy settings
+    const legacy = await getStorage([StorageKeys.API_KEY, StorageKeys.API_BASE_URL, StorageKeys.MODEL]);
+    configs = [migrateLegacyApiConfig(legacy)];
+    await setStorage({
+      [StorageKeys.API_CONFIGS]: configs,
+      [StorageKeys.ACTIVE_API_CONFIG]: configs[0].id
+    });
+  }
+  return configs;
+}
+
+async function setApiConfigs(configs) {
+  await setStorage({ [StorageKeys.API_CONFIGS]: configs });
+}
+
+async function getActiveApiConfigId() {
+  const result = await getStorage([StorageKeys.ACTIVE_API_CONFIG]);
+  return result[StorageKeys.ACTIVE_API_CONFIG] || '';
+}
+
+async function setActiveApiConfigId(id) {
+  await setStorage({ [StorageKeys.ACTIVE_API_CONFIG]: id });
+}
+
+// Resolve a config by id, falling back to the active config, then the first.
+async function resolveApiConfig(configId) {
+  const configs = await getApiConfigs();
+  const activeId = await getActiveApiConfigId();
+  return configs.find(c => c.id === configId)
+    || configs.find(c => c.id === activeId)
+    || configs[0];
+}
+
+// Only the official OpenAI endpoint hard-requires a key; local/self-hosted
+// servers (especially Ollama) commonly run without one.
+function configRequiresApiKey(config) {
+  return !config.apiKey && isOfficialOpenAiUrl(config.apiBaseUrl);
+}
+
+function generateConfigId() {
+  return 'cfg_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 }
 
 async function getMaxTokens() {
@@ -127,15 +200,6 @@ async function getMaxTokens() {
 
 async function setMaxTokens(tokens) {
   await setStorage({ [StorageKeys.MAX_TOKENS]: tokens });
-}
-
-async function getModel() {
-  const result = await getStorage([StorageKeys.MODEL]);
-  return result[StorageKeys.MODEL] || DEFAULT_MODEL;
-}
-
-async function setModel(model) {
-  await setStorage({ [StorageKeys.MODEL]: model });
 }
 
 async function getTemplates() {

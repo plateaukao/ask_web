@@ -304,7 +304,7 @@ async function loadTemplates(root) {
     btn.dataset.model = t.model || '';
 
     // Attach click listener directly
-    btn.addEventListener('click', () => handleTemplateClick(root, t.prompt, t.model));
+    btn.addEventListener('click', () => handleTemplateClick(root, t.prompt, t.model, null, t.configId));
 
     if (isSelectionWindow) {
       btn.style.display = 'none';
@@ -363,7 +363,7 @@ function waitForShadowRoot(callback) {
 }
 
 // Logic for Template Clicks
-async function handleTemplateClick(root, promptTemplate, modelOverride, historyMetadata = null) {
+async function handleTemplateClick(root, promptTemplate, modelOverride, historyMetadata = null, configId = undefined) {
   const resultArea = root.getElementById('resultArea');
   const resultContent = root.getElementById('resultContent');
   const loading = root.getElementById('loading');
@@ -391,7 +391,8 @@ async function handleTemplateClick(root, promptTemplate, modelOverride, historyM
         role: 'user',
         content: prompt
       }],
-      model: modelOverride // Pass optional model override
+      model: modelOverride, // Pass optional model override
+      configId // Optional API configuration override from the template
     });
 
     // Show result area immediately for streaming
@@ -513,7 +514,7 @@ async function triggerTemplateAction(template) {
   // If window is already open, clear old content and run immediately
   if (isVisible && shadowRoot) {
     clearResultArea(shadowRoot);
-    handleTemplateClick(shadowRoot, template.prompt, template.model);
+    handleTemplateClick(shadowRoot, template.prompt, template.model, null, template.configId);
     return;
   }
 
@@ -522,12 +523,12 @@ async function triggerTemplateAction(template) {
   // If shadowRoot is ready (window existed but was hidden), run immediately
   if (shadowRoot) {
     clearResultArea(shadowRoot);
-    handleTemplateClick(shadowRoot, template.prompt, template.model);
+    handleTemplateClick(shadowRoot, template.prompt, template.model, null, template.configId);
     return;
   }
 
   // Wait for shadowRoot to be initialized (fresh window creation)
-  waitForShadowRoot(() => handleTemplateClick(shadowRoot, template.prompt, template.model));
+  waitForShadowRoot(() => handleTemplateClick(shadowRoot, template.prompt, template.model, null, template.configId));
 }
 
 async function handleChatClick(root) {
@@ -1570,7 +1571,7 @@ async function createSelectionIcon() {
     const triggerAction = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model, includeTextContext: tmpl.includeTextContext });
+      handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model, configId: tmpl.configId, includeTextContext: tmpl.includeTextContext });
     };
     if (triggerMode === 'hover') {
       icon.addEventListener('mouseenter', triggerAction);
@@ -1590,7 +1591,7 @@ async function createSelectionIcon() {
       btn.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model, includeTextContext: tmpl.includeTextContext });
+        handleSelectionIconClick({ prompt: tmpl.prompt, model: tmpl.model, configId: tmpl.configId, includeTextContext: tmpl.includeTextContext });
       });
       actionMenu.appendChild(btn);
     });
@@ -1599,7 +1600,7 @@ async function createSelectionIcon() {
     icon.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      handleSelectionIconClick({ prompt: firstTmpl.prompt, model: firstTmpl.model, includeTextContext: firstTmpl.includeTextContext });
+      handleSelectionIconClick({ prompt: firstTmpl.prompt, model: firstTmpl.model, configId: firstTmpl.configId, includeTextContext: firstTmpl.includeTextContext });
     });
   } else {
     // No selection templates — trigger directly via click or hover
@@ -1633,21 +1634,22 @@ async function handleSelectionIconClick(templateOverride) {
 
   const tmplPrompt = (templateOverride && templateOverride.prompt) ? templateOverride.prompt : '{{selection}}';
   const model = (templateOverride && templateOverride.model) ? templateOverride.model : '';
+  const configId = templateOverride ? templateOverride.configId : undefined;
   const finalPrompt = buildSelectionPrompt(tmplPrompt, selectionText, context, includeContext);
 
   if (isVisible && shadowRoot) {
-    handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
+    handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata, configId);
     return;
   }
 
   await toggleFloatingWindow(true, currentSelection.range);
 
   if (shadowRoot) {
-    handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata);
+    handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata, configId);
     return;
   }
 
-  waitForShadowRoot(() => handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata));
+  waitForShadowRoot(() => handleTemplateClick(shadowRoot, finalPrompt, model, historyMetadata, configId));
 }
 
 function getSelectionContext(range, charCount = 300) {
@@ -1708,6 +1710,7 @@ async function handleContextMenuSelection(selectionText) {
   const tmpl = await getDefaultSelectionTemplate();
   const tmplPrompt = tmpl ? tmpl.prompt : '{{selection}}';
   const tmplModel = tmpl ? (tmpl.model || '') : '';
+  const tmplConfigId = tmpl ? tmpl.configId : undefined;
   const includeContext = tmpl ? tmpl.includeTextContext !== false : true;
 
   const selection = window.getSelection();
@@ -1724,18 +1727,18 @@ async function handleContextMenuSelection(selectionText) {
 
   if (isVisible && shadowRoot) {
     clearResultArea(shadowRoot);
-    handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata);
+    handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata, tmplConfigId);
     return;
   }
 
   await toggleFloatingWindow(true, range);
 
   if (shadowRoot) {
-    handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata);
+    handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata, tmplConfigId);
     return;
   }
 
-  waitForShadowRoot(() => handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata));
+  waitForShadowRoot(() => handleTemplateClick(shadowRoot, finalPrompt, tmplModel, historyMetadata, tmplConfigId));
 }
 
 function buildSelectionContextForAction(selectionText, context) {

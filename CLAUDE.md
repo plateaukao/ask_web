@@ -51,6 +51,10 @@ Two separate SSE streaming paths (`data: ...` lines, `[DONE]` sentinel):
 
 All keys defined in `StorageKeys` in `utils.js`. `background.js` duplicates a few constants since it's a service worker and cannot import `utils.js`.
 
+### API Configuration Sets
+
+Endpoint settings live in `api_configs` (array) + `active_api_config_id` in `chrome.storage.local`. Each config: `{ id, name, apiBaseUrl, apiKey, models: [..], model, isOllama, reasoningEffort, thinking }`. Ollama configs (auto-detected from the URL, user-overridable) use the native `/api/chat` endpoint and a `think` on/off toggle; other configs send `reasoning_effort` when set (`'none'` = omit). Legacy single-endpoint keys (`openai_api_key` / `openai_api_base_url` / `openai_model`) are migrated into one config on first read (`getApiConfigs` in `utils.js`, mirrored in `background.js`). Requests carry an optional `configId` (from a template or the chat tab's picker); `resolveApiConfig` falls back to the active config. Only the official OpenAI endpoint requires an API key.
+
 ### Model Detection (`prepareRequestBody` in background.js)
 
 Models whose name starts with `o1-`, `o3-`, `reasoning`, or contains `5` are treated as reasoning models: `max_tokens` → `max_completion_tokens` and `temperature` is removed.

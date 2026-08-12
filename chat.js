@@ -2,6 +2,7 @@
 
 let pageData = null;
 let templates = [];
+let apiConfigs = [];
 let messages = [];
 let isLoading = false;
 let currentStreamContent = '';
@@ -151,15 +152,47 @@ function renderMermaidBlocks(container) {
 }
 
 async function loadSettings() {
-  // Load model
-  const model = await getModel();
-  modelSelect.value = model;
+  // Load models from every API configuration, grouped by configuration name.
+  // Option values encode both: "<configId>||<model>".
+  apiConfigs = await getApiConfigs();
+  const activeId = await getActiveApiConfigId();
+  modelSelect.innerHTML = apiConfigs.map(config => {
+    const options = (config.models || []).map(m =>
+      `<option value="${escapeAttr(config.id + '||' + m)}">${escapeAttr(m)}</option>`
+    ).join('');
+    return `<optgroup label="${escapeAttr(config.name)}">${options}</optgroup>`;
+  }).join('');
+
+  // Restore the last selection if it still exists; otherwise use the active
+  // configuration's default model.
+  const stored = await getStorage([StorageKeys.CHAT_MODEL_SELECTION]);
+  const saved = stored[StorageKeys.CHAT_MODEL_SELECTION];
+  const activeConfig = apiConfigs.find(c => c.id === activeId) || apiConfigs[0];
+  const fallback = activeConfig.id + '||' + (activeConfig.model || activeConfig.models[0]);
+  const savedValue = saved ? saved.configId + '||' + saved.model : '';
+  modelSelect.value = [...modelSelect.options].some(o => o.value === savedValue)
+    ? savedValue
+    : fallback;
 
   // Load templates
   templates = await getTemplates();
   templateSelect.innerHTML = templates.map(t =>
     `<option value="${t.id}">${t.name}</option>`
   ).join('');
+}
+
+function escapeAttr(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML.replace(/"/g, '&quot;');
+}
+
+// The chat's model picker selects both a configuration and a model.
+function selectedConfigAndModel() {
+  const value = modelSelect.value || '';
+  const sep = value.indexOf('||');
+  if (sep === -1) return { configId: '', model: '' };
+  return { configId: value.slice(0, sep), model: value.slice(sep + 2) };
 }
 
 async function loadPageData() {
@@ -181,13 +214,11 @@ async function loadPageData() {
 }
 
 function setupEventListeners() {
-  // Model change - now handles input instead of select
+  // Persist the chosen configuration + model for the next chat session
   modelSelect.addEventListener('change', async () => {
-    await setModel(modelSelect.value);
-  });
-  modelSelect.addEventListener('blur', async () => {
-    if (modelSelect.value.trim()) {
-      await setModel(modelSelect.value.trim());
+    const { configId, model } = selectedConfigAndModel();
+    if (configId && model) {
+      await setStorage({ [StorageKeys.CHAT_MODEL_SELECTION]: { configId, model } });
     }
   });
 
@@ -406,10 +437,12 @@ async function sendMessage() {
   const content = messageInput.value.trim();
   if (!content || isLoading) return;
 
-  // Check for API key
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    addMessage('assistant', 'Please set your OpenAI API key in the extension settings.');
+  // Check for API key on the selected configuration (local servers like
+  // Ollama don't need one)
+  const { configId, model } = selectedConfigAndModel();
+  const config = await resolveApiConfig(configId);
+  if (configRequiresApiKey(config)) {
+    addMessage('assistant', `Please set the API key for "${config.name}" in the extension settings.`);
     return;
   }
 
@@ -441,10 +474,12 @@ async function sendMessage() {
   resetStreamMermaid();
   currentStreamElement = createStreamingMessage();
 
-  // Start streaming request
+  // Start streaming request with the selected configuration + model
   chrome.runtime.sendMessage({
     action: 'startStream',
-    messages: apiMessages
+    messages: apiMessages,
+    configId,
+    model
   });
 }
 

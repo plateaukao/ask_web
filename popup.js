@@ -215,18 +215,19 @@ async function handleSummarize() {
     return;
   }
 
-  // Check for API key
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    showError('Please set your OpenAI API key in settings');
-    return;
-  }
-
   // Get selected template
   const templateId = templateSelect.value;
   const template = templates.find(t => t.id === templateId);
   if (!template) {
     showError('Template not found');
+    return;
+  }
+
+  // Check for API key on the template's configuration (local servers like
+  // Ollama don't need one)
+  const config = await resolveApiConfig(template.configId);
+  if (configRequiresApiKey(config)) {
+    showError(`Please set the API key for "${config.name}" in settings`);
     return;
   }
 
@@ -255,6 +256,8 @@ async function handleSummarize() {
   chrome.runtime.sendMessage({
     action: 'startPopupStream',
     messages: messages,
+    configId: template.configId,
+    model: template.model,
     tabId: currentTabId
   });
 }
