@@ -519,7 +519,8 @@ function prepareRequestBody(model, baseParams, config) {
     model.startsWith('o1-') ||
     model.startsWith('o3-') ||
     model.includes('reasoning') ||
-    model.includes('5'); // User mentioned 5.2-pro
+    model.includes('5') ||
+    /^gpt-6(?:[.-]|$)/.test(model);
 
   const body = { ...baseParams, model };
 
@@ -543,7 +544,8 @@ function prepareRequestBody(model, baseParams, config) {
     const effort = config.reasoningEffort;
     if (effort && effort !== 'none' &&
         (!isOfficialOpenAiUrl(config.apiBaseUrl) || isReasoningModel)) {
-      body.reasoning_effort = effort;
+      body.reasoning_effort = /^gpt-6(?:[.-]|$)/.test(model) && effort === 'minimal'
+        ? 'low' : effort;
     }
   }
 

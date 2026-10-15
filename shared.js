@@ -7,7 +7,7 @@
 export const DEFAULT_API_BASE_URL = 'https://api.openai.com/v1';
 export const DEFAULT_MAX_TOKENS = 100000;
 export const DEFAULT_MODEL = 'gpt-5.2-pro';
-export const DEFAULT_MODEL_IDS = ['gpt-5.2-pro', 'gpt-5.1', 'gpt-4.1'];
+export const DEFAULT_MODEL_IDS = ['gpt-5.2-pro', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.1', 'gpt-4.1'];
 
 export const STORAGE_KEYS = {
   API_KEY: 'openai_api_key',

@@ -41,7 +41,7 @@ Ask Web is a Chrome extension that lets you read any web page through an AI assi
 
 1. Click the Ask Web icon and open **Settings** (or visit `chrome-extension://<id>/options.html` after loading unpacked).
 2. Enter your **OpenAI API key**. It is stored locally via `chrome.storage.local`.
-3. Pick a **default model** (e.g., `gpt-5.2-pro`) or type a custom one.
+3. Pick a **default model** (e.g., `gpt-5.2-pro`) or type a custom one. GPT-6 Astra, Sol, Luna, and GPT-6.1 Sol are supported; for an existing configuration, add their API IDs (`gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-6.1-sol`) to its models list.
 4. Build **prompt templates**:
    - Each template has a name, optional model override, multi-line prompt with `{{content}}` placeholder, and optional hotkey (`Ctrl+Shift+S`, etc.).
    - Templates instantly sync to the floating window and chat page.

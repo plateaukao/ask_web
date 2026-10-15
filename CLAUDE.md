@@ -57,7 +57,7 @@ Endpoint settings live in `api_configs` (array) + `active_api_config_id` in `chr
 
 ### Model Detection (`prepareRequestBody` in background.js)
 
-Models whose name starts with `o1-`, `o3-`, `reasoning`, or contains `5` are treated as reasoning models: `max_tokens` → `max_completion_tokens` and `temperature` is removed.
+Models whose name starts with `o1-`, `o3-`, `reasoning`, contains `5`, or starts with `gpt-6` (including `gpt-6.1`) are treated as reasoning models: `max_tokens` → `max_completion_tokens` and `temperature` is removed.
 
 ### Template Placeholders
 

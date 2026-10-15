@@ -47,7 +47,11 @@ function applyTheme(theme) {
 }
 
 var DefaultModels = DefaultModels || [
-  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro (Latest)' },
+  { id: 'gpt-5.2-pro', name: 'GPT-5.2 Pro' },
+  { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' },
+  { id: 'gpt-6-astra', name: 'GPT-6 Astra' },
+  { id: 'gpt-6-sol', name: 'GPT-6 Sol' },
+  { id: 'gpt-6-luna', name: 'GPT-6 Luna' },
   { id: 'gpt-5.1', name: 'GPT-5.1' },
   { id: 'gpt-4.1', name: 'GPT-4.1' }
 ];
